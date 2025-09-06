@@ -20,26 +20,55 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* 3択ダイアログ */
+    #mapDialog { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.45); z-index:1000; }
+    #mapDialog .panel { width:92%; max-width:340px; background:#fff; border-radius:16px; padding:16px 16px 12px; box-shadow:0 10px 25px rgba(0,0,0,.18); }
+    #mapDialog h3 { font-size:16px; font-weight:600; margin:4px 0 10px; word-break:keep-all; }
+    #mapDialog .btn { width:100%; border:none; border-radius:10px; padding:12px 14px; font-size:15px; margin-top:8px; }
+    #mapDialog .google { background:#4285F4; color:#fff; }
+    #mapDialog .apple  { background:#111; color:#fff; }
+    #mapDialog .cancel { background:#e5e7eb; color:#111; }
+  </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
+  <!-- 3択ダイアログ -->
+  <div id="mapDialog" onclick="closeDialog()">
+    <div class="panel" onclick="event.stopPropagation()">
+      <div class="text-xs text-gray-500">地図を開く</div>
+      <h3 id="mapPlace">場所名</h3>
+      <button class="btn google" onclick="goGoogle()">Google Map</button>
+      <button class="btn apple"  onclick="goApple()">Apple Map</button>
+      <button class="btn cancel" onclick="closeDialog()">戻る</button>
+    </div>
+  </div>
+
   <div id="root"></div>
 
   <script type="text/babel">
     const { useEffect } = React;
 
-    // ===== ユーティリティ =====
+    // ===== 共有ユーティリティ =====
     const gSearch = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
     const aSearch = (q) => `https://maps.apple.com/?q=${encodeURIComponent(q)}`;
 
-    // 店名をタップ → ダイアログで Google/Apple を選ぶ
-    function openMap(place) {
-      const choice = window.confirm(`${place}\n\nOK：Google Maps\nキャンセル：Apple Maps`);
-      const url = choice ? gSearch(place) : aSearch(place);
-      window.open(url, "_blank");
-    }
+    // ダイアログ制御
+    let currentPlace = "";
+    window.openMapDialog = (place) => {
+      currentPlace = place;
+      document.getElementById("mapPlace").innerText = place;
+      document.getElementById("mapDialog").style.display = "flex";
+    };
+    window.closeDialog = () => {
+      document.getElementById("mapDialog").style.display = "none";
+      currentPlace = "";
+    };
+    window.goGoogle = () => { window.open(gSearch(currentPlace), "_blank"); closeDialog(); };
+    window.goApple  = () => { window.open(aSearch(currentPlace), "_blank"); closeDialog(); };
 
     // ===== 候補リスト =====
-    // Day2/Day3 昼（ユーザー指定の5件）
+    // Day2/Day3 昼（依頼の5件）
     const day2_3LunchCandidates = [
       { name: "元祖 博多めんたい重" },
       { name: "博多シーフード うお田" },
@@ -48,7 +77,7 @@
       { name: "大地のうどん 博多駅ちかてん（朝日ビルB2）" },
     ];
 
-    // Day1 空港内（10人以上OKの候補）
+    // Day1 空港内（10人以上OK）
     const airportLunchCandidates = [
       { name: "竹乃屋 福岡空港店" },
       { name: "ラーメン滑走路（フードホール）" },
@@ -57,17 +86,21 @@
       { name: "B.B.Quisine（国内線3F）" },
     ];
 
-    // ===== タイムライン（絵文字ありのクラシック）=====
+    // ===== タイムライン（絵文字あり・クラシック）=====
     const timeline = [
       {
         day: "Day 1 (9/19 金)",
         events: [
           { time: "12:10", title: "🛫 名古屋発（飛行機）", detail: "12:10 → 13:35", hideMaps: true },
           { time: "12:15", title: "🛫 東京発（飛行機）",   detail: "12:15 → 14:10", hideMaps: true },
-          { time: "15:00", title: "🍴 お昼", detail: "空港内の候補（10人以上OK）", candidates: airportLunchCandidates },
+
+          { time: "15:00", title: "🍴 お昼", detail: "空港内の候補（10人以上OK）",
+            candidates: airportLunchCandidates },
+
           { time: "16:00", title: "🏨 チェックイン",
             detail: "HOTEL 粋 - sui - HARUYOSHI（旧Grand Base Fukuoka）",
             mapsQ: "HOTEL 粋 - sui - HARUYOSHI" },
+
           { time: "16:30", title: "🚴 自転車観光",
             detail: "大濠公園 / 福岡城跡 / 博多ポートタワー / 櫛田神社 / 承天寺通り など",
             candidates: [
@@ -76,23 +109,29 @@
               { name: "博多ポートタワー" },
               { name: "櫛田神社" },
               { name: "承天寺通り" },
-            ]},
+            ] },
+
           { time: "20:30", title: "🍲 夜ご飯",
             detail: "元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）",
             mapsQ: "元祖 もつ鍋 楽天地 天神本店" },
+
           { time: "22:00", title: "🕒 自由時間", hideMaps: true },
         ]
       },
       {
         day: "Day 2 (9/20 土)",
         events: [
-          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択", candidates: day2_3LunchCandidates },
+          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択",
+            candidates: day2_3LunchCandidates },
+
           { time: "14:00", title: "🎯 アクティビティ",
             detail: "EXBAR TOKYO plus 博多（キャナルシティ博多 5F）",
             mapsQ: "EXBAR TOKYO plus 博多" },
+
           { time: "18:00", title: "🍺 夜ご飯",
             detail: "海鮮居酒屋 まる家 西中洲",
             mapsQ: "海鮮居酒屋 まる家 西中洲" },
+
           { time: "20:00", title: "🍸 2件目（未定）", hideMaps: true },
           { time: "22:00", title: "🕒 自由時間", hideMaps: true },
         ]
@@ -100,21 +139,34 @@
       {
         day: "Day 3 (9/21 日)",
         events: [
-          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択", candidates: day2_3LunchCandidates },
-          { time: "13:00", title: "🛍️ 空港ショッピング（お土産）", candidates: [
-            { name: "ANA FESTA（国内線）" },
-            { name: "博多銘品蔵" },
-            { name: "そらもーる商店" },
-            { name: "福太郎（明太子）" },
-            { name: "東雲堂（にわかせんぺい）" },
-          ]},
+          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択",
+            candidates: day2_3LunchCandidates },
+
+          { time: "13:00", title: "🛍️ 空港ショッピング（お土産）",
+            candidates: [
+              { name: "ANA FESTA（国内線）" },
+              { name: "博多銘品蔵" },
+              { name: "そらもーる商店" },
+              { name: "福太郎（明太子）" },
+              { name: "東雲堂（にわかせんぺい）" },
+            ] },
+
           { time: "14:15", title: "🛬 東京組 帰り（飛行機）", detail: "14:15 → 16:05", hideMaps: true },
           { time: "14:50", title: "🛬 名古屋組 帰り（飛行機）", detail: "14:50 → 16:40", hideMaps: true },
         ]
       }
     ];
 
-    // ===== 見た目（クラシックの縦タイムライン）=====
+    // ===== UI =====
+    const Pill = ({ children, onClick }) => (
+      <button
+        onClick={onClick}
+        className="inline-block px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
+      >
+        {children}
+      </button>
+    );
+
     function EventCard({ time, title, detail, mapsQ, hideMaps, candidates }) {
       return (
         <div className="mb-8 ml-6 relative">
@@ -125,27 +177,20 @@
               <div className="font-semibold text-gray-900 text-lg">{title}</div>
               {detail && <div className="text-sm text-gray-600 mt-1">{detail}</div>}
 
-              {/* 固定の地図リンク（必要な項目のみ表示） */}
+              {/* 固定スポット → 「地図を開く」1ボタン（ダイアログ3択） */}
               {!hideMaps && mapsQ && (
-                <div className="mt-2 text-sm">
-                  <a href={gSearch(mapsQ)} target="_blank" rel="noreferrer" className="underline text-blue-600 mr-3">Google Maps</a>
-                  <a href={aSearch(mapsQ)} target="_blank" rel="noreferrer" className="underline text-green-700">Apple Maps</a>
+                <div className="mt-3">
+                  <Pill onClick={() => openMapDialog(mapsQ)}>地図を開く</Pill>
                 </div>
               )}
 
-              {/* 候補（店名をタップ → ダイアログで Google/Apple 選択） */}
+              {/* 候補（ピル型・タップで3択ダイアログ） */}
               {candidates && (
                 <div className="mt-3">
-                  <div className="text-xs text-gray-500 mb-1">候補</div>
-                  <div className="grid grid-cols-1 gap-2">
+                  <div className="text-xs text-gray-500 mb-2">候補（タップでマップを選択）</div>
+                  <div className="flex flex-wrap gap-2">
                     {candidates.map((s, i) => (
-                      <button
-                        key={i}
-                        onClick={() => openMap(s.name)}
-                        className="text-left bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg"
-                      >
-                        {s.name}
-                      </button>
+                      <Pill key={i} onClick={() => openMapDialog(s.name)}>{s.name}</Pill>
                     ))}
                   </div>
                 </div>

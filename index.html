@@ -4,35 +4,280 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>福岡旅行</title>
+
+    <!-- PWA / iPhone アイコン -->
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-180.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="福岡旅行" />
     <meta name="theme-color" content="#b91c1c" />
+
+    <!-- Tailwind（テイルウィンド） -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React（リアクト）/ ReactDOM（リアクトドム） -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel（バベル）: JSX をブラウザで変換 -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   </head>
+
   <body class="bg-gray-100">
     <div id="root"></div>
+
     <script type="text/babel">
       const { useEffect } = React;
+
+      /* Google/Apple の両方リンクを表示（Google短縮URLでもOKなように検索にフォールバック） */
+      function MapLinks({ gmap, label }) {
+        const q = encodeURIComponent(label || "目的地");
+        let google = gmap || "";
+        if (!google || google.includes("maps.app.goo.gl")) {
+          google = `https://www.google.com/maps/search/?api=1&query=${q}`;
+        }
+        const apple = `https://maps.apple.com/?q=${q}`;
+        return (
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+            <a href={google} target="_blank" rel="noreferrer" className="underline hover:opacity-80">Google Maps</a>
+            <a href={apple} target="_blank" rel="noreferrer" className="underline hover:opacity-80">Apple Maps</a>
+          </div>
+        );
+      }
+
+      function LinkCard({ time, icon, title, detail, gmap, extra, hideMaps=false }) {
+        return (
+          <div className="mb-6 ml-6 relative">
+            <div className="absolute -left-6 top-3 w-3 h-3 rounded-full bg-blue-500"></div>
+            <div className="flex items-start gap-4">
+              <div className="w-16 shrink-0 text-right font-bold">{time}</div>
+              <div className="flex-1 bg-white rounded-xl shadow p-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{icon}</span>
+                  <div>
+                    <p className="font-semibold leading-tight">{title}</p>
+                    {detail && <p className="text-sm text-gray-600 leading-tight mt-0.5">{detail}</p>}
+                  </div>
+                </div>
+                {!hideMaps && <MapLinks gmap={gmap} label={`${title} ${detail ?? ""}`.trim()} />}
+                {extra}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function DaySection({ dayTitle, children }) {
+        return (
+          <div className="w-full max-w-4xl mb-10">
+            <h2 className="text-2xl font-semibold mb-6 border-b pb-2">{dayTitle}</h2>
+            <div className="relative ml-6 border-l-4 border-gray-300">
+              {children}
+            </div>
+          </div>
+        );
+      }
+
       function App() {
+        /* PWA キャッシュ（ピー ダブリュー エー） */
         useEffect(() => {
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker.register("/sw.js").catch(() => {});
           }
         }, []);
+
+        /* 飛行機（タイムラインにも反映） */
+        const flights = {
+          名古屋組: { out: { dep: "12:10", arr: "13:35" }, back: { dep: "14:50", arr: "16:40" } },
+          東京組:   { out: { dep: "12:15", arr: "14:10" }, back: { dep: "14:15", arr: "16:05" } },
+        };
+
+        /* 自転車観光スポット候補（王道） */
+        const bikeSpots = [
+          { name: "大濠公園", q: "大濠公園" },
+          { name: "福岡城跡（舞鶴公園）", q: "福岡城跡 舞鶴公園" },
+          { name: "福岡タワー", q: "福岡タワー" },
+          { name: "櫛田神社", q: "櫛田神社" },
+          { name: "博多ポートタワー", q: "博多ポートタワー" },
+          { name: "承天寺通り（博多旧市街）", q: "承天寺通り" },
+        ];
+
+        /* 2日目/3日目の昼候補（ユーザー指定URLを検索に変換して開く） */
+        const day2_3LunchCandidates = [
+          { name: "候補A", url: "https://maps.app.goo.gl/xyWxxNXdffqtJ5hL9?g_st=com.google.maps.preview.copy" },
+          { name: "候補B", url: "https://maps.app.goo.gl/tH6kmkYrT4bhsi7XA?g_st=com.google.maps.preview.copy" },
+          { name: "候補C", url: "https://maps.app.goo.gl/ot9SM3Ebtx2wjRZQ6?g_st=com.google.maps.preview.copy" },
+          { name: "候補D", url: "https://maps.app.goo.gl/S8e6MUHfUPX1Q6ro6?g_st=com.google.maps.preview.copy" },
+          { name: "候補E", url: "https://maps.app.goo.gl/AL318ib9omzbFqJB6?g_st=com.google.maps.preview.copy" },
+        ];
+
         return (
           <div className="p-8 bg-gray-100 w-full min-h-screen flex flex-col items-center text-gray-900 font-sans">
             <h1 className="text-3xl font-bold tracking-wide mb-1">福岡旅行</h1>
             <p className="text-sm text-gray-600 mb-6">期間：2025.09.19 - 2025.09.21</p>
-            <p>📌 iPhoneでホーム画面に追加する手順：Safariでこのページを開く → 共有ボタン（□に↑）→ <b>ホーム画面に追加</b> → アイコンから起動できます。</p>
+
+            {/* フライト概要カード */}
+            <div className="w-full max-w-4xl grid md:grid-cols-2 gap-4 mb-10">
+              {Object.entries(flights).map(([group, t]) => (
+                <div key={group} className="bg-white rounded-xl shadow p-4">
+                  <p className="font-semibold mb-2">✈️ {group}</p>
+                  <div className="text-sm grid grid-cols-3 items-center gap-2">
+                    <div className="text-gray-500">行き</div>
+                    <div className="col-span-2 font-mono">{t.out.dep} → {t.out.arr}</div>
+                    <div className="text-gray-500">帰り</div>
+                    <div className="col-span-2 font-mono">{t.back.dep} → {t.back.arr}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Day 1 */}
+            <DaySection dayTitle="Day 1 (9/19 金)">
+              <LinkCard time={flights.名古屋組.out.dep} icon="🛫" title="名古屋組 出発" detail={`${flights.名古屋組.out.dep} → ${flights.名古屋組.out.arr}`} hideMaps />
+              <LinkCard time={flights.東京組.out.dep} icon="🛫" title="東京組 出発" detail={`${flights.東京組.out.dep} → ${flights.東京組.out.arr}`} hideMaps />
+
+              <LinkCard
+                time="15:00" icon="🍽️" title="お昼（空港内候補）" detail="大人数OKの店候補"
+                extra={
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500 mb-1">候補（タップでGoogle Maps検索）</div>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { name: "竹乃屋 福岡空港店", q: "竹乃屋 福岡空港店" },
+                        { name: "ラーメン滑走路", q: "福岡空港 ラーメン滑走路" },
+                        { name: "因幡うどん（空港）", q: "因幡うどん 福岡空港" },
+                        { name: "うまや 福岡空港店", q: "うまや 福岡空港" },
+                        { name: "B.B.Quisine", q: "B.B.Quisine 福岡空港" },
+                      ].map((s) => (
+                        <a key={s.name}
+                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.q)}`}
+                           target="_blank" rel="noreferrer"
+                           className="px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-xs">{s.name}</a>
+                      ))}
+                    </div>
+                  </div>
+                }
+              />
+
+              <LinkCard
+                time="16:00" icon="🏨" title="チェックイン"
+                detail="HOTEL 粋 - sui - HARUYOSHI（旧Grand Base Fukuoka）"
+                gmap="https://maps.app.goo.gl/nkXvNUJemUVH2egAA?g_st=com.google.maps.preview.copy"
+              />
+
+              <LinkCard
+                time="16:30" icon="🚲" title="自転車観光" detail="福岡市内 王道スポットめぐり"
+                extra={
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500 mb-1">スポット候補</div>
+                    <div className="flex flex-wrap gap-2">
+                      {bikeSpots.map((s) => (
+                        <a key={s.name}
+                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.q)}`}
+                           target="_blank" rel="noreferrer"
+                           className="px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-xs">{s.name}</a>
+                      ))}
+                    </div>
+                  </div>
+                }
+              />
+
+              <LinkCard
+                time="20:30" icon="🍲" title="夜ご飯"
+                detail="元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）"
+                gmap="https://maps.app.goo.gl/VivBRoqG9HBYDhjX7?g_st=com.google.maps.preview.copy"
+              />
+
+              <LinkCard time="22:00" icon="🕒" title="自由時間" hideMaps />
+            </DaySection>
+
+            {/* Day 2 */}
+            <DaySection dayTitle="Day 2 (9/20 土)">
+              <LinkCard
+                time="12:00" icon="🍽️" title="お昼（候補）" detail="候補から選択"
+                extra={
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500 mb-1">候補（タップでGoogle Maps）</div>
+                    <div className="flex flex-wrap gap-2">
+                      {day2_3LunchCandidates.map((s, i) => (
+                        <a key={i}
+                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.url)}`}
+                           target="_blank" rel="noreferrer"
+                           className="px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-xs">{s.name}</a>
+                      ))}
+                    </div>
+                  </div>
+                }
+              />
+
+              <LinkCard
+                time="14:00" icon="🎯" title="アクティビティ"
+                detail="EXBAR TOKYO plus 博多（キャナルシティ博多 5F）"
+                gmap="https://maps.app.goo.gl/6YZryEY3JAzLhgos6?g_st=com.google.maps.preview.copy"
+              />
+
+              <LinkCard
+                time="18:00" icon="🍻" title="夜ご飯" detail="海鮮居酒屋 まる家 西中洲"
+                gmap="https://maps.app.goo.gl/MdSpRp4jzZZQzjkQ9?g_st=com.google.maps.preview.copy"
+              />
+
+              <LinkCard time="20:00" icon="🥂" title="2件目" detail="（未定）" hideMaps />
+              <LinkCard time="22:00" icon="🕒" title="自由時間" hideMaps />
+            </DaySection>
+
+            {/* Day 3 */}
+            <DaySection dayTitle="Day 3 (9/21 日)">
+              <LinkCard
+                time="12:00" icon="🍽️" title="お昼（候補）" detail="候補から選択"
+                extra={
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500 mb-1">候補（タップでGoogle Maps）</div>
+                    <div className="flex flex-wrap gap-2">
+                      {day2_3LunchCandidates.map((s, i) => (
+                        <a key={i}
+                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.url)}`}
+                           target="_blank" rel="noreferrer"
+                           className="px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-xs">{s.name}</a>
+                      ))}
+                    </div>
+                  </div>
+                }
+              />
+
+              <LinkCard
+                time="13:00" icon="🛍️" title="空港でショッピング（お土産）"
+                extra={
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500 mb-1">空港内ショップ候補</div>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { name: "ANA FESTA（国内線）", q: "ANA FESTA 福岡空港 国内線" },
+                        { name: "博多銘品蔵", q: "博多銘品蔵 福岡空港" },
+                        { name: "そらもーる商店", q: "そらもーる 商店 福岡空港" },
+                        { name: "福太郎（明太子）", q: "福太郎 福岡空港" },
+                        { name: "にわかせんぺい 東雲堂", q: "東雲堂 福岡空港" },
+                      ].map((s) => (
+                        <a key={s.name}
+                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.q)}`}
+                           target="_blank" rel="noreferrer"
+                           className="px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-xs">{s.name}</a>
+                      ))}
+                    </div>
+                  </div>
+                }
+              />
+
+              <LinkCard time="14:15" icon="🛫" title="東京組 出発" detail="14:15 → 16:05" hideMaps />
+              <LinkCard time="14:50" icon="🛫" title="名古屋組 出発" detail="14:50 → 16:40" hideMaps />
+            </DaySection>
+
+            <footer className="mt-2 text-xs text-gray-500 text-center pb-10">
+              📌 iPhoneでホーム画面に追加する手順（ホームスクリーン アッド）：
+              Safariでこのページを開く → 共有ボタン（□に↑）→ <b>ホーム画面に追加</b> → アイコンから起動できます。
+            </footer>
           </div>
         );
       }
+
       const root = ReactDOM.createRoot(document.getElementById("root"));
       root.render(<App />);
     </script>

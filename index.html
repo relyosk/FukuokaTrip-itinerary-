@@ -216,23 +216,27 @@ function EventCard({ time, title, detail, mapsQ, hideMaps, candidates, isFirstGl
           <p className="text-sm text-gray-600 mb-6">期間：2025.09.19 - 2025.09.21</p>
 
           <div className="w-full max-w-4xl">
-            {timeline.map((d, idxDay) => (
-              <div key={idxDay} className="mb-12">
-                <h2 className="text-xl font-semibold mb-6 border-b pb-2">{d.day}</h2>
-                <div>
-                  {d.events.map((ev, i) => (
-                    <EventCard
-                      key={i}
-                      {...ev}
-                      isFirst={i === 0}
-                      isLast ={i === d.events.length - 1}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
+  {timeline.map((d, idxDay) => (
+    <div key={idxDay} className="mb-12">
+      <h2 className="text-xl font-semibold mb-6 border-b pb-2">{d.day}</h2>
+      <div>
+        {d.events.map((ev, i, arr) => {
+          const isFirstGlobal = idxDay === 0 && i === 0;
+          const isLastGlobal =
+            idxDay === timeline.length - 1 && i === arr.length - 1;
+          return (
+            <EventCard
+              key={`${idxDay}-${i}`}
+              {...ev}
+              isFirstGlobal={isFirstGlobal}
+              isLastGlobal={isLastGlobal}
+            />
+          );
+        })}
+      </div>
+    </div>
+  ))}
+</div>
           <footer className="mt-2 text-xs text-gray-500 text-center pb-10">
             📌 iPhoneでホーム画面に追加：Safariで開く → 共有（□に↑）→ <b>ホーム画面に追加</b>
           </footer>

@@ -134,15 +134,16 @@
 
 function EventCard({ time, title, detail, mapsQ, hideMaps, candidates, isFirst, isLast }) {
   return (
-    <div className="grid grid-cols-[64px_14px_1fr] gap-4 items-start mb-8">
-      {/* 時刻：等幅でズレ防止 */}
-      <div className="text-right font-bold text-gray-800 leading-6 pt-1 tabular-nums">
+    // 行の余白は pb-8（最後の行だけ 0）
+    <div className={`grid grid-cols-[64px_14px_1fr] gap-4 items-stretch ${isLast ? 'pb-0' : 'pb-8'}`}>
+      {/* 時刻：中央揃え＆等幅数字 */}
+      <div className="flex items-center justify-end font-bold text-gray-800 tabular-nums">
         {time}
       </div>
 
-      {/* 縦レール列（※min高さを与えて安全に） */}
+      {/* 縦レール列（この列の高さ=行の高さなので線が切れない） */}
       <div className="relative min-h-[72px]">
-        {/* 上半分の線（初要素以外） */}
+        {/* 上半分（先頭以外） */}
         {!isFirst && (
           <div
             className="absolute left-1/2 -translate-x-1/2 w-[2px] bg-gray-300 rounded-full"
@@ -154,7 +155,7 @@ function EventCard({ time, title, detail, mapsQ, hideMaps, candidates, isFirst, 
           className="absolute left-1/2 -translate-x-1/2 w-3 h-3 bg-blue-600 rounded-full"
           style={{ top: '50%', transform: 'translate(-50%, -50%)' }}
         />
-        {/* 下半分の線（末要素以外） */}
+        {/* 下半分（最後以外） */}
         {!isLast && (
           <div
             className="absolute left-1/2 -translate-x-1/2 w-[2px] bg-gray-300 rounded-full"

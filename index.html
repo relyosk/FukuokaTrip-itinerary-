@@ -91,16 +91,9 @@
         events: [
           { time: "12:10", title: "🛫 名古屋発（飛行機）", detail: "12:10 → 13:35", hideMaps: true },
           { time: "12:15", title: "🛫 東京発（飛行機）",   detail: "12:15 → 14:10", hideMaps: true },
-
-          { time: "15:00", title: "🍴 お昼", detail: "空港内の候補（10人以上OK）",
-            candidates: airportLunchCandidates },
-
-          { time: "16:00", title: "🏨 チェックイン",
-            detail: "HOTEL 粋 - sui - HARUYOSHI（旧Grand Base Fukuoka）",
-            mapsQ: "HOTEL 粋 - sui - HARUYOSHI" },
-
-          { time: "16:30", title: "🚴 自転車観光",
-            detail: "大濠公園 / 福岡城跡 / 博多ポートタワー / 櫛田神社 / 承天寺通り など",
+          { time: "15:00", title: "🍴 お昼", detail: "空港内の候補（10人以上OK）", candidates: airportLunchCandidates },
+          { time: "16:00", title: "🏨 チェックイン", detail: "HOTEL 粋 - sui - HARUYOSHI（旧Grand Base Fukuoka）", mapsQ: "HOTEL 粋 - sui - HARUYOSHI" },
+          { time: "16:30", title: "🚴 自転車観光", detail: "大濠公園 / 福岡城跡 / 博多ポートタワー / 櫛田神社 / 承天寺通り など",
             candidates: [
               { name: "大濠公園" },
               { name: "福岡城跡（舞鶴公園）" },
@@ -108,28 +101,16 @@
               { name: "櫛田神社" },
               { name: "承天寺通り" },
             ] },
-
-          { time: "20:30", title: "🍲 夜ご飯",
-            detail: "元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）",
-            mapsQ: "元祖 もつ鍋 楽天地 天神本店" },
-
+          { time: "20:30", title: "🍲 夜ご飯", detail: "元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）", mapsQ: "元祖 もつ鍋 楽天地 天神本店" },
           { time: "22:00", title: "🕒 自由時間", hideMaps: true },
         ]
       },
       {
         day: "Day 2 (9/20 土)",
         events: [
-          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択",
-            candidates: day2_3LunchCandidates },
-
-          { time: "14:00", title: "🎯 アクティビティ",
-            detail: "EXBAR TOKYO plus 博多（キャナルシティ博多 5F）",
-            mapsQ: "EXBAR TOKYO plus 博多" },
-
-          { time: "18:00", title: "🍺 夜ご飯",
-            detail: "海鮮居酒屋 まる家 西中洲",
-            mapsQ: "海鮮居酒屋 まる家 西中洲" },
-
+          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択", candidates: day2_3LunchCandidates },
+          { time: "14:00", title: "🎯 アクティビティ", detail: "EXBAR TOKYO plus 博多（キャナルシティ博多 5F）", mapsQ: "EXBAR TOKYO plus 博多" },
+          { time: "18:00", title: "🍺 夜ご飯", detail: "海鮮居酒屋 まる家 西中洲", mapsQ: "海鮮居酒屋 まる家 西中洲" },
           { time: "20:00", title: "🍸 2件目（未定）", hideMaps: true },
           { time: "22:00", title: "🕒 自由時間", hideMaps: true },
         ]
@@ -137,9 +118,7 @@
       {
         day: "Day 3 (9/21 日)",
         events: [
-          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択",
-            candidates: day2_3LunchCandidates },
-
+          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択", candidates: day2_3LunchCandidates },
           { time: "13:00", title: "🛍️ 空港ショッピング（お土産）",
             candidates: [
               { name: "ANA FESTA（国内線）" },
@@ -148,7 +127,6 @@
               { name: "福太郎（明太子）" },
               { name: "東雲堂（にわかせんぺい）" },
             ] },
-
           { time: "14:15", title: "🛬 東京組 帰り（飛行機）", detail: "14:15 → 16:05", hideMaps: true },
           { time: "14:50", title: "🛬 名古屋組 帰り（飛行機）", detail: "14:50 → 16:40", hideMaps: true },
         ]
@@ -169,10 +147,10 @@
     function EventCard({ time, title, detail, mapsQ, hideMaps, candidates }) {
       return (
         <div className="grid grid-cols-[64px_14px_1fr] gap-4 items-start mb-8">
-          {/* 時間：等幅数字でブレ防止（tabular-nums） */}
+          {/* 時間：等幅数字でブレ防止（tabular-nums タビュラー・ナンバーズ） */}
           <div className="text-right font-bold text-gray-800 leading-6 pt-1 tabular-nums">{time}</div>
 
-          {/* 縦線＆青点：列の中央を基準に配置（絶対座標マジックナンバー無し） */}
+          {/* 縦線＆青点：列の中央を基準に配置（機種差ゼロ） */}
           <div className="relative">
             <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-gray-300"></div>
             <div className="w-3 h-3 bg-blue-600 rounded-full absolute left-1/2 -translate-x-1/2 mt-1"></div>
@@ -216,7 +194,7 @@
       return (
         <div
           className="p-6 md:p-8 w-full min-h-screen flex flex-col items-center"
-          style="padding-top: calc(env(safe-area-inset-top, 0px) + 12px);"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}  /* ← ここを修正 */
         >
           <h1 className="text-3xl font-bold tracking-wide mt-2">福岡旅行</h1>
           <p className="text-sm text-gray-600 mb-6">期間：2025.09.19 - 2025.09.21</p>

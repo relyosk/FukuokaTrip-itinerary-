@@ -15,7 +15,7 @@
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React -->
+  <!-- React / ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <!-- Babel -->
@@ -23,13 +23,13 @@
 
   <style>
     /* 3択ダイアログ */
-    #mapDialog{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
-    #mapDialog .panel{width:92%;max-width:340px;background:#fff;border-radius:16px;padding:16px 16px 12px;box-shadow:0 10px 25px rgba(0,0,0,.18)}
-    #mapDialog h3{font-size:16px;font-weight:600;margin:4px 0 10px;word-break:keep-all}
-    #mapDialog .btn{width:100%;border:none;border-radius:10px;padding:12px 14px;font-size:15px;margin-top:8px}
-    #mapDialog .google{background:#4285F4;color:#fff}
-    #mapDialog .apple{background:#111;color:#fff}
-    #mapDialog .cancel{background:#e5e7eb;color:#111}
+    #mapDialog { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.45); z-index:1000; }
+    #mapDialog .panel { width:92%; max-width:340px; background:#fff; border-radius:16px; padding:16px 16px 12px; box-shadow:0 10px 25px rgba(0,0,0,.18); }
+    #mapDialog h3 { font-size:16px; font-weight:600; margin:4px 0 10px; word-break:keep-all; }
+    #mapDialog .btn { width:100%; border:none; border-radius:10px; padding:12px 14px; font-size:15px; margin-top:8px; }
+    #mapDialog .google { background:#4285F4; color:#fff; }
+    #mapDialog .apple  { background:#111; color:#fff; }
+    #mapDialog .cancel { background:#e5e7eb; color:#111; }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
@@ -47,180 +47,179 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useEffect, useRef, useState } = React;
+    const { useEffect } = React;
 
-    // Maps 検索
-    const gSearch = (q)=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
-    const aSearch = (q)=>`https://maps.apple.com/?q=${encodeURIComponent(q)}`;
+    /* ===== レイアウト定数（ズレ防止） ===== */
+    const TIME_COL_PX = 72;   // 時間列幅
+    const DOT_COL_PX  = 20;   // ドット列幅
+    const LINE_X_PX   = TIME_COL_PX + DOT_COL_PX/2; // 縦線とドットの中央X座標 = 82px
+
+    /* ===== 共有ユーティリティ ===== */
+    const gSearch = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+    const aSearch = (q) => `https://maps.apple.com/?q=${encodeURIComponent(q)}`;
 
     // ダイアログ制御
     let currentPlace = "";
-    window.openMapDialog=(place)=>{ currentPlace=place; document.getElementById("mapPlace").innerText=place; document.getElementById("mapDialog").style.display="flex"; };
-    window.closeDialog = ()=>{ document.getElementById("mapDialog").style.display="none"; currentPlace=""; };
-    window.goGoogle   = ()=>{ window.open(gSearch(currentPlace),"_blank"); closeDialog(); };
-    window.goApple    = ()=>{ window.open(aSearch(currentPlace),"_blank"); closeDialog(); };
+    window.openMapDialog = (place) => {
+      currentPlace = place;
+      document.getElementById("mapPlace").innerText = place;
+      document.getElementById("mapDialog").style.display = "flex";
+    };
+    window.closeDialog = () => {
+      document.getElementById("mapDialog").style.display = "none";
+      currentPlace = "";
+    };
+    window.goGoogle = () => { window.open(gSearch(currentPlace), "_blank"); closeDialog(); };
+    window.goApple  = () => { window.open(aSearch(currentPlace), "_blank"); closeDialog(); };
 
-    // 候補
-    const day2_3LunchCandidates=[
-      {name:"元祖 博多めんたい重"},
-      {name:"博多シーフード うお田"},
-      {name:"魚ト肴 いとおかし（春吉）"},
-      {name:"ひしむら（春吉）"},
-      {name:"大地のうどん 博多駅ちかてん（朝日ビルB2）"},
+    /* ===== 候補 ===== */
+    const day2_3LunchCandidates = [
+      { name: "元祖 博多めんたい重" },
+      { name: "博多シーフード うお田" },
+      { name: "魚ト肴 いとおかし（春吉）" },
+      { name: "ひしむら（春吉）" },
+      { name: "大地のうどん 博多駅ちかてん（朝日ビルB2）" },
     ];
-    const airportLunchCandidates=[
-      {name:"竹乃屋 福岡空港店"},
-      {name:"ラーメン滑走路（フードホール）"},
-      {name:"因幡うどん（福岡空港）"},
-      {name:"うまや 福岡空港店"},
-      {name:"B.B.Quisine（国内線3F）"},
-    ];
-
-    // タイムライン
-    const timeline=[
-      { day:"Day 1 (9/19 金)", events:[
-        {time:"12:10", title:"🛫 名古屋発（飛行機）", detail:"12:10 → 13:35", hideMaps:true},
-        {time:"12:15", title:"🛫 東京発（飛行機）",   detail:"12:15 → 14:10", hideMaps:true},
-        {time:"15:00", title:"🍴 お昼", detail:"空港内の候補（10人以上OK）", candidates:airportLunchCandidates},
-        {time:"16:00", title:"🏨 チェックイン", detail:"HOTEL 粋 - sui - HARUYOSHI（旧Grand Base Fukuoka）", mapsQ:"HOTEL 粋 - sui - HARUYOSHI"},
-        {time:"16:30", title:"🚴 自転車観光", detail:"大濠公園 / 福岡城跡 / 博多ポートタワー / 櫛田神社 / 承天寺通り など",
-          candidates:[{name:"大濠公園"},{name:"福岡城跡（舞鶴公園）"},{name:"博多ポートタワー"},{name:"櫛田神社"},{name:"承天寺通り"}]},
-        {time:"20:30", title:"🍲 夜ご飯", detail:"元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）", mapsQ:"元祖 もつ鍋 楽天地 天神本店"},
-        {time:"22:00", title:"🕒 自由時間", hideMaps:true},
-      ]},
-      { day:"Day 2 (9/20 土)", events:[
-        {time:"12:00", title:"🍴 お昼（候補）", detail:"候補から選択", candidates:day2_3LunchCandidates},
-        {time:"14:00", title:"🎯 アクティビティ", detail:"EXBAR TOKYO plus 博多（キャナルシティ博多 5F）", mapsQ:"EXBAR TOKYO plus 博多"},
-        {time:"18:00", title:"🍺 夜ご飯", detail:"海鮮居酒屋 まる家 西中洲", mapsQ:"海鮮居酒屋 まる家 西中洲"},
-        {time:"20:00", title:"🍸 2件目（未定）", hideMaps:true},
-        {time:"22:00", title:"🕒 自由時間", hideMaps:true},
-      ]},
-      { day:"Day 3 (9/21 日)", events:[
-        {time:"12:00", title:"🍴 お昼（候補）", detail:"候補から選択", candidates:day2_3LunchCandidates},
-        {time:"13:00", title:"🛍️ 空港ショッピング（お土産）",
-          candidates:[{name:"ANA FESTA（国内線）"},{name:"博多銘品蔵"},{name:"そらもーる商店"},{name:"福太郎（明太子）"},{name:"東雲堂（にわかせんぺい）"}]},
-        {time:"14:15", title:"🛬 東京組 帰り（飛行機）", detail:"14:15 → 16:05", hideMaps:true},
-        {time:"14:50", title:"🛬 名古屋組 帰り（飛行機）", detail:"14:50 → 16:40", hideMaps:true},
-      ]},
+    const airportLunchCandidates = [
+      { name: "竹乃屋 福岡空港店" },
+      { name: "ラーメン滑走路（フードホール）" },
+      { name: "因幡うどん（福岡空港）" },
+      { name: "うまや 福岡空港店" },
+      { name: "B.B.Quisine（国内線3F）" },
     ];
 
-    const Pill=({children,onClick})=>(
+    /* ===== タイムライン ===== */
+    const timeline = [
+      {
+        day: "Day 1 (9/19 金)",
+        events: [
+          { time: "12:10", title: "🛫 名古屋発（飛行機）", detail: "12:10 → 13:35", hideMaps: true },
+          { time: "12:15", title: "🛫 東京発（飛行機）",   detail: "12:15 → 14:10", hideMaps: true },
+          { time: "15:00", title: "🍴 お昼", detail: "空港内の候補（10人以上OK）", candidates: airportLunchCandidates },
+          { time: "16:00", title: "🏨 チェックイン", detail: "HOTEL 粋 - sui - HARUYOSHI（旧Grand Base Fukuoka）", mapsQ: "HOTEL 粋 - sui - HARUYOSHI" },
+          { time: "16:30", title: "🚴 自転車観光", detail: "大濠公園 / 福岡城跡 / 博多ポートタワー / 櫛田神社 / 承天寺通り など",
+            candidates: [
+              { name: "大濠公園" }, { name: "福岡城跡（舞鶴公園）" }, { name: "博多ポートタワー" }, { name: "櫛田神社" }, { name: "承天寺通り" },
+            ] },
+          { time: "20:30", title: "🍲 夜ご飯", detail: "元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）", mapsQ: "元祖 もつ鍋 楽天地 天神本店" },
+          { time: "22:00", title: "🕒 自由時間", hideMaps: true },
+        ]
+      },
+      {
+        day: "Day 2 (9/20 土)",
+        events: [
+          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択", candidates: day2_3LunchCandidates },
+          { time: "14:00", title: "🎯 アクティビティ", detail: "EXBAR TOKYO plus 博多（キャナルシティ博多 5F）", mapsQ: "EXBAR TOKYO plus 博多" },
+          { time: "18:00", title: "🍺 夜ご飯", detail: "海鮮居酒屋 まる家 西中洲", mapsQ: "海鮮居酒屋 まる家 西中洲" },
+          { time: "20:00", title: "🍸 2件目（未定）", hideMaps: true },
+          { time: "22:00", title: "🕒 自由時間", hideMaps: true },
+        ]
+      },
+      {
+        day: "Day 3 (9/21 日)",
+        events: [
+          { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択", candidates: day2_3LunchCandidates },
+          { time: "13:00", title: "🛍️ 空港ショッピング（お土産）",
+            candidates: [
+              { name: "ANA FESTA（国内線）" }, { name: "博多銘品蔵" },
+              { name: "そらもーる商店" }, { name: "福太郎（明太子）" }, { name: "東雲堂（にわかせんぺい）" },
+            ] },
+          { time: "14:15", title: "🛬 東京組 帰り（飛行機）", detail: "14:15 → 16:05", hideMaps: true },
+          { time: "14:50", title: "🛬 名古屋組 帰り（飛行機）", detail: "14:50 → 16:40", hideMaps: true },
+        ]
+      }
+    ];
+
+    /* ===== 共通UI ===== */
+    const Pill = ({ children, onClick }) => (
       <button onClick={onClick} className="inline-block px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm">
         {children}
       </button>
     );
 
-    // 置き換え：EventRow
-function EventRow({ time, title, detail, mapsQ, hideMaps, candidates }) {
-  return (
-    <div className="grid grid-cols-[72px_20px_1fr] gap-4 items-center mb-8">
-      {/* 時間（等幅数字＋ベースラインのズレ防止） */}
-      <div className="text-right font-bold text-gray-800 tabular-nums leading-none">
-        {time}
-      </div>
-
-      {/* 青丸（セル中央。ラインは DaySection の SVG を使用） */}
-      <div className="flex items-center justify-center">
-        <div className="w-3 h-3 rounded-full bg-blue-600 dot-center" />
-      </div>
-
-      {/* カード */}
-      <div className="bg-white rounded-2xl shadow p-4">
-        <div className="font-semibold text-gray-900 text-lg">{title}</div>
-        {detail && <div className="text-sm text-gray-600 mt-1">{detail}</div>}
-
-        {!hideMaps && mapsQ && (
-          <div className="mt-3">
-            <button
-              onClick={() => openMapDialog(mapsQ)}
-              className="inline-block px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
-            >
-              地図を開く
-            </button>
+    /* 1行（時間・ドット・カード）。線は Day セクション側で描く */
+    function EventRow({ time, title, detail, mapsQ, hideMaps, candidates }) {
+      return (
+        <div className="grid grid-cols-[72px_20px_1fr] gap-4 items-start mb-8">
+          {/* 時間（等幅数字で横ブレ防止） */}
+          <div className="text-right font-bold text-gray-800 leading-6 pt-1 tabular-nums">
+            {time}
           </div>
-        )}
 
-        {candidates && (
-          <div className="mt-3">
-            <div className="text-xs text-gray-500 mb-2">候補（タップでマップを選択）</div>
-            <div className="flex flex-wrap gap-2">
-              {candidates.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => openMapDialog(s.name)}
-                  className="inline-block px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
+          {/* ドット（線は背面のSVGで描画。ドットとX座標一致） */}
+          <div className="flex justify-center">
+            <div className="w-3 h-3 rounded-full bg-blue-600 mt-1"></div>
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
-    // Day セクション（線を1本だけ描く）
-    function DaySection({day,events, idx}) {
-      const wrapRef = useRef(null);
-      const [lineStyle,setLineStyle] = useState({display:'none'});
+          {/* カード */}
+          <div className="flex-1 bg-white rounded-2xl shadow p-4">
+            <div className="font-semibold text-gray-900 text-lg">{title}</div>
+            {detail && <div className="text-sm text-gray-600 mt-1">{detail}</div>}
 
-      useEffect(()=>{
-        const wrap = wrapRef.current;
-        if(!wrap) return;
+            {!hideMaps && mapsQ && (
+              <div className="mt-3">
+                <Pill onClick={() => openMapDialog(mapsQ)}>地図を開く</Pill>
+              </div>
+            )}
 
-        // その日の最初と最後の青丸（白マスクの直後の丸）を取得
-        const dots = wrap.querySelectorAll('.dot-for-measure');
-        if(dots.length===0) return;
+            {candidates && (
+              <div className="mt-3">
+                <div className="text-xs text-gray-500 mb-2">候補（タップでマップを選択）</div>
+                <div className="flex flex-wrap gap-2">
+                  {candidates.map((s, i) => (
+                    <Pill key={i} onClick={() => openMapDialog(s.name)}>{s.name}</Pill>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
 
-        const first = dots[0].getBoundingClientRect();
-const last  = dots[dots.length-1].getBoundingClientRect();
-const base  = wrap.getBoundingClientRect();
-
-// 中心座標を正確に取る
-const centerX = (first.left + first.right)/2 - base.left;
-const startY  = (first.top  + first.bottom)/2 - base.top;
-const endY    = (last.top   + last.bottom)/2 - base.top;
-
-setLineStyle({
-  position:'absolute',
-  left:`${centerX}px`,
-  top:`${startY}px`,   // 青丸の真ん中から
-  height:`${endY - startY}px`,
-  width:'2px',
-  background:'#D1D5DB',
-  transform:'translateX(-50%)',
-  zIndex:0
-});
-      },[events.length]);
-
+    /* Day セクション。ここで「見出しには干渉しない」縦線を背面に描く */
+    function DaySection({ day, events }) {
       return (
         <section className="mb-12">
           <h2 className="text-xl font-semibold mb-6 border-b pb-2">{day}</h2>
 
-          <div ref={wrapRef} className="relative">
-            {/* Day全体の背面に縦線（丸の下だけ見える。丸は白マスクで隠す） */}
-            <div style={lineStyle}></div>
+          {/* イベント領域（相対）。背面に縦線SVGを1本だけ置く */}
+          <div className="relative">
+            <svg
+              className="pointer-events-none absolute"
+              style={{ left: `${LINE_X_PX}px`, top: 0, width: '2px', height: '100%' }}
+            >
+              <line x1="1" y1="0" x2="1" y2="100%" stroke="#d1d5db" stroke-width="2" />
+            </svg>
 
-            {events.map((ev,i)=>(
-              <EventRow key={i} {...ev} dotClass="dot-for-measure"/>
-            ))}
+            <div>
+              {events.map((ev, i) => (
+                <EventRow key={i} {...ev} />
+              ))}
+            </div>
           </div>
         </section>
       );
     }
 
-    function App(){
-      useEffect(()=>{ if("serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{});} },[]);
+    function App() {
+      useEffect(() => {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.register("/sw.js").catch(()=>{});
+        }
+      }, []);
+
       return (
-        <div className="p-6 md:p-8 w-full min-h-screen flex flex-col items-center" style={{paddingTop:'calc(env(safe-area-inset-top,0px)+12px)'}}>
+        <div
+          className="p-6 md:p-8 w-full min-h-screen flex flex-col items-center"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 32px)' }}
+        >
           <h1 className="text-3xl font-bold tracking-wide mt-2">福岡旅行</h1>
           <p className="text-sm text-gray-600 mb-6">期間：2025.09.19 - 2025.09.21</p>
 
           <div className="w-full max-w-4xl">
-            {timeline.map((d,idx)=>(
-              <DaySection key={idx} day={d.day} events={d.events} idx={idx}/>
+            {timeline.map((d, idx) => (
+              <DaySection key={idx} day={d.day} events={d.events} />
             ))}
           </div>
 
@@ -231,7 +230,7 @@ setLineStyle({
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 </body>
 </html>

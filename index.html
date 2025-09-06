@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>福岡旅行</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="福岡旅行" />
+    <meta name="theme-color" content="#b91c1c" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-gray-100">
+    <div id="root"></div>
+    <script type="text/babel">
+      const { useEffect } = React;
+      function App() {
+        useEffect(() => {
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("/sw.js").catch(() => {});
+          }
+        }, []);
+        return (
+          <div className="p-8 bg-gray-100 w-full min-h-screen flex flex-col items-center text-gray-900 font-sans">
+            <h1 className="text-3xl font-bold tracking-wide mb-1">福岡旅行</h1>
+            <p className="text-sm text-gray-600 mb-6">期間：2025.09.19 - 2025.09.21</p>
+            <p>📌 iPhoneでホーム画面に追加する手順：Safariでこのページを開く → 共有ボタン（□に↑）→ <b>ホーム画面に追加</b> → アイコンから起動できます。</p>
+          </div>
+        );
+      }
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>

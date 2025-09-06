@@ -49,6 +49,10 @@
   <script type="text/babel">
     const { useEffect } = React;
 
+    // --- 縦線の位置（固定値） ---
+    const SPINE_X = 88;
+
+    // Google / Apple Maps 検索URL
     const gSearch = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
     const aSearch = (q) => `https://maps.apple.com/?q=${encodeURIComponent(q)}`;
 
@@ -66,7 +70,7 @@
     window.goGoogle = () => { window.open(gSearch(currentPlace), "_blank"); closeDialog(); };
     window.goApple  = () => { window.open(aSearch(currentPlace), "_blank"); closeDialog(); };
 
-    // 候補
+    // 候補データ
     const day2_3LunchCandidates = [
       { name: "元祖 博多めんたい重" },
       { name: "博多シーフード うお田" },
@@ -125,81 +129,54 @@
       }
     ];
 
-    // ピル共通
+    // ピルボタン
     const Pill = ({ children, onClick }) => (
-      <button onClick={onClick} className="inline-block px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm">
+      <button
+        onClick={onClick}
+        className="inline-block px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
+      >
         {children}
       </button>
     );
 
-function EventCard({ time, title, detail, mapsQ, hideMaps, candidates, isFirstGlobal, isLastGlobal }) {
-  return (
-    <div className={`grid grid-cols-[64px_14px_1fr] gap-4 items-stretch pb-8`}>
-      {/* 時間 */}
-      <div className="flex items-center justify-end font-bold text-gray-800 tabular-nums">
-        {time}
-      </div>
-
-      {/* 縦レール */}
-      <div className="relative min-h-[72px]">
-        {/* 上半分の線（全体の先頭以外は描画） */}
-        {!isFirstGlobal && (
+    // イベントカード（ドットだけ描画、線は全体で引く）
+    function EventCard({ time, title, detail, mapsQ, hideMaps, candidates }) {
+      return (
+        <div className="relative grid grid-cols-[64px_1fr] gap-6 items-start mb-8">
+          {/* ドット */}
           <div
-            className="absolute left-1/2 -translate-x-1/2 w-[2px] bg-gray-300 rounded-full"
-            style={{ top: 0, bottom: '50%' }}
+            className="absolute z-10 w-3 h-3 rounded-full bg-blue-600"
+            style={{ left: `${SPINE_X}px`, top: 28, transform: 'translateX(-50%)' }}
           />
-        )}
-        {/* ドット */}
-        <div
-          className="absolute left-1/2 -translate-x-1/2 w-3 h-3 bg-blue-600 rounded-full"
-          style={{ top: '50%', transform: 'translate(-50%, -50%)' }}
-        />
-        {/* 下半分の線（全体の最後以外は描画） */}
-        {!isLastGlobal && (
-          <div
-            className="absolute left-1/2 -translate-x-1/2 w-[2px] bg-gray-300 rounded-full"
-            style={{ top: '50%', bottom: 0 }}
-          />
-        )}
-      </div>
-
-      {/* カード */}
-      <div className="flex-1 bg-white rounded-2xl shadow p-4">
-        <div className="font-semibold text-gray-900 text-lg">{title}</div>
-        {detail && <div className="text-sm text-gray-600 mt-1">{detail}</div>}
-
-        {!hideMaps && mapsQ && (
-          <div className="mt-3">
-            <button
-              onClick={() => openMapDialog(mapsQ)}
-              className="inline-block px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
-            >
-              地図を開く
-            </button>
+          {/* 時間 */}
+          <div className="text-right font-bold text-gray-800 leading-6 pt-[6px] tabular-nums">
+            {time}
           </div>
-        )}
-
-        {candidates && (
-          <div className="mt-3">
-            <div className="text-xs text-gray-500 mb-2">候補（タップでマップを選択）</div>
-            <div className="flex flex-wrap gap-2">
-              {candidates.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => openMapDialog(s.name)}
-                  className="inline-block px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
+          {/* 本文 */}
+          <div className="bg-white rounded-2xl shadow p-4">
+            <div className="font-semibold text-gray-900 text-lg">{title}</div>
+            {detail && <div className="text-sm text-gray-600 mt-1">{detail}</div>}
+            {!hideMaps && mapsQ && (
+              <div className="mt-3">
+                <Pill onClick={() => openMapDialog(mapsQ)}>地図を開く</Pill>
+              </div>
+            )}
+            {candidates && (
+              <div className="mt-3">
+                <div className="text-xs text-gray-500 mb-2">候補（タップでマップを選択）</div>
+                <div className="flex flex-wrap gap-2">
+                  {candidates.map((s, i) => (
+                    <Pill key={i} onClick={() => openMapDialog(s.name)}>{s.name}</Pill>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        </div>
+      );
+    }
 
+    // App本体
     function App() {
       useEffect(() => {
         if ("serviceWorker" in navigator) {
@@ -215,28 +192,24 @@ function EventCard({ time, title, detail, mapsQ, hideMaps, candidates, isFirstGl
           <h1 className="text-3xl font-bold tracking-wide mt-2">福岡旅行</h1>
           <p className="text-sm text-gray-600 mb-6">期間：2025.09.19 - 2025.09.21</p>
 
-          <div className="w-full max-w-4xl">
-  {timeline.map((d, idxDay) => (
-    <div key={idxDay} className="mb-12">
-      <h2 className="text-xl font-semibold mb-6 border-b pb-2">{d.day}</h2>
-      <div>
-        {d.events.map((ev, i, arr) => {
-          const isFirstGlobal = idxDay === 0 && i === 0;
-          const isLastGlobal =
-            idxDay === timeline.length - 1 && i === arr.length - 1;
-          return (
-            <EventCard
-              key={`${idxDay}-${i}`}
-              {...ev}
-              isFirstGlobal={isFirstGlobal}
-              isLastGlobal={isLastGlobal}
+          <div className="w-full max-w-4xl relative">
+            {/* 1本のグローバル縦線 */}
+            <div
+              className="pointer-events-none absolute top-0 bottom-0 w-[2px] bg-gray-300"
+              style={{ left: `${SPINE_X}px`, zIndex: 0 }}
             />
-          );
-        })}
-      </div>
-    </div>
-  ))}
-</div>
+            {timeline.map((d, idxDay) => (
+              <div key={idxDay} className="mb-12 relative z-10">
+                <h2 className="text-xl font-semibold mb-6 border-b pb-2">{d.day}</h2>
+                <div>
+                  {d.events.map((ev, i) => (
+                    <EventCard key={`${idxDay}-${i}`} {...ev} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
           <footer className="mt-2 text-xs text-gray-500 text-center pb-10">
             📌 iPhoneでホーム画面に追加：Safariで開く → 共有（□に↑）→ <b>ホーム画面に追加</b>
           </footer>

@@ -52,7 +52,9 @@
   const RAIL_COL = 20;   // px（中央にレール、丸の直径12px）
   const GRID_GAP = 16;   // 列間の隙間
   const DOT_DIAM = 12;   // 丸の直径
-  const RAIL_LEFT_PX = TIME_COL + GRID_GAP + (RAIL_COL/2); // Day 全体レールの X
+
+  const RAIL_OFFSET = -1; // -2〜+2 くらいで調整
+  const RAIL_LEFT_PX = TIME_COL + GRID_GAP + (RAIL_COL / 2) + RAIL_OFFSET;
 
   /* ---- マップダイアログ ---- */
   const gSearch = q => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;

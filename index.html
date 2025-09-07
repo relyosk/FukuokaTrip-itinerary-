@@ -1,367 +1,356 @@
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>福岡旅行</title>
+import React, { useEffect, useRef, useState } from "react";
 
-  <!-- PWA / iPhone -->
-  <link rel="manifest" href="/manifest.json" />
-  <link rel="apple-touch-icon" href="/icons/icon-180.png" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="福岡旅行" />
-  <meta name="theme-color" content="#b91c1c" />
+/**
+ * Fukuoka Trip – Pro UI (React Preview)
+ * - Tailwind only, no external libs
+ * - Timeline with fixed rail, aligned time + dot
+ * - Map chooser dialog (Google / Apple)
+ * - Flight detail drawer (swipe-down-to-close) with stricter threshold (~4cm ≒ 150px)
+ * - Scroll lock while dialogs are open
+ */
 
-  <!-- Tailwind / React / Babel (UMD) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+/* ===== Helpers: map links ===== */
+const gSearchByName = (name) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
+const aSearchByName = (name) => `https://maps.apple.com/?q=${encodeURIComponent(name)}`;
+const gByLatLng = (lat, lng, label) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}&query_place_id=&center=${lat},${lng}`;
+const aByLatLng = (lat, lng, label) => `https://maps.apple.com/?ll=${lat},${lng}&q=${encodeURIComponent(label)}`;
 
-  <style>
-    /* Map 3択モーダル（共通） */
-    #mapDialog{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
-    #mapDialog .panel{width:min(92%,380px);background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 25px rgba(0,0,0,.18);max-height:80vh;display:flex;flex-direction:column}
-    #mapDialog .head{font-size:15px;font-weight:600;margin-bottom:8px}
-    #mapDialog .place{font-size:16px;font-weight:700;margin-bottom:12px;word-break:keep-all}
-    #mapDialog .btn{width:100%;border:none;border-radius:10px;padding:12px 14px;font-size:15px;margin-top:8px}
-    #mapDialog .google{background:#4285F4;color:#fff}
-    #mapDialog .apple{background:#111;color:#fff}
-    #mapDialog .cancel{background:#e5e7eb;color:#111}
+const mapLink = (target, place) => {
+  if (place.lat && place.lng) {
+    return target === "google" ? gByLatLng(place.lat, place.lng, place.label ?? place.name) : aByLatLng(place.lat, place.lng, place.label ?? place.name);
+  }
+  return target === "google" ? gSearchByName(place.name) : aSearchByName(place.name);
+};
 
-    /* Flight モーダル：ページ背面は固定、内容だけスクロール */
-    #flightSheet{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
-    #flightSheet .sheet{width:100%;max-width:680px;background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -10px 25px rgba(0,0,0,.18);display:flex;flex-direction:column;max-height:85vh;
-      will-change: transform; transition: transform .25s ease;}
-    #flightSheet .sheet.dragging{transition:none}
-    #flightSheet .bar{width:44px;height:5px;background:#e5e7eb;border-radius:9999px;margin:10px auto 6px}
-    #flightSheet .body{overflow:auto;padding:8px 16px 16px}
-    /* アコーディオン */
-    details{background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin:12px 0}
-    summary{cursor:pointer;list-style:none;padding:14px 16px;font-weight:700}
-    summary::-webkit-details-marker{display:none}
-    .card{padding:14px 16px;border-top:1px solid #f1f5f9}
-  </style>
-</head>
-<body class="bg-gray-100 text-gray-900">
+/* ===== Data ===== */
+const day2_3LunchCandidates = [
+  { name: "元祖 博多めんたい重" },
+  { name: "博多シーフード うお田" },
+  { name: "魚ト肴 いとおかし（春吉）" },
+  { name: "ひしむら（春吉）" },
+  { name: "大地のうどん 博多駅ちかてん（朝日ビルB2）" },
+];
+const airportLunchCandidates = [
+  { name: "竹乃屋 福岡空港店" },
+  { name: "ラーメン滑走路（フードホール）" },
+  { name: "因幡うどん（福岡空港）" },
+  { name: "うまや 福岡空港店" },
+  { name: "B.B.Quisine（国内線3F）" },
+];
 
-  <!-- Map 3択モーダル -->
-  <div id="mapDialog" onclick="closeDialog()">
-    <div class="panel" onclick="event.stopPropagation()">
-      <div class="head">地図を開く</div>
-      <div id="mapPlace" class="place">場所名</div>
-      <button class="btn google" onclick="goGoogle()">Google Map</button>
-      <button class="btn apple"  onclick="goApple()">Apple Map</button>
-      <button class="btn cancel" onclick="closeDialog()">戻る</button>
-    </div>
-  </div>
+// Hotel – lock to coordinates from user's link for stability
+const HOTEL_PLACE = { name: "HOTEL 粋 - sui - HARUYOSHI", lat: 33.58752, lng: 130.40260, label: "HOTEL 粋 - sui - HARUYOSHI" };
 
-  <!-- Flight モーダル（行き／帰り） -->
-  <div id="flightSheet" onclick="closeFlight()">
-    <!-- ▼シート本体に id 付与（ドラッグ対象） -->
-    <div id="flightPanel" class="sheet" onclick="event.stopPropagation()">
-      <div class="bar"></div>
-      <div class="body" id="flightBody"></div>
-      <button class="w-full p-4 text-center font-semibold bg-gray-100" onclick="closeFlight()">閉じる</button>
-    </div>
-  </div>
+const timeline = [
+  {
+    day: "Day 1 (9/19 金)",
+    events: [
+      { time: "12:10", title: "🛫 名古屋発（飛行機）", detail: "12:10 → 13:35", kind: "flight-out" },
+      { time: "12:15", title: "🛫 東京発（飛行機）", detail: "12:15 → 14:10", kind: "flight-out" },
+      { time: "15:00", title: "🍴 お昼", detail: "空港内の候補（10人以上OK）", candidates: airportLunchCandidates },
+      { time: "16:00", title: "🏨 チェックイン", detail: "HOTEL 粋 - sui - HARUYOSHI（旧Grand Base Fukuoka）", place: HOTEL_PLACE },
+      { time: "16:30", title: "🚴 自転車観光", detail: "大濠公園 / 福岡城跡 / 博多ポートタワー / 櫛田神社 / 承天寺通り など",
+        candidates: [
+          { name: "大濠公園" },
+          { name: "福岡城跡（舞鶴公園）" },
+          { name: "博多ポートタワー" },
+          { name: "櫛田神社" },
+          { name: "承天寺通り" },
+        ] },
+      { time: "20:30", title: "🍲 夜ご飯", detail: "元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）", place: { name: "元祖 もつ鍋 楽天地 天神本店" } },
+      { time: "22:00", title: "🕒 自由時間" },
+    ],
+  },
+  {
+    day: "Day 2 (9/20 土)",
+    events: [
+      { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択", candidates: day2_3LunchCandidates },
+      { time: "14:00", title: "🎯 アクティビティ", detail: "EXBAR TOKYO plus 博多（キャナルシティ博多 5F）", place: { name: "EXBAR TOKYO plus 博多" } },
+      { time: "18:00", title: "🍺 夜ご飯", detail: "海鮮居酒屋 まる家 西中洲", place: { name: "海鮮居酒屋 まる家 西中洲" } },
+      { time: "20:00", title: "🍸 2件目（未定）" },
+      { time: "22:00", title: "🕒 自由時間" },
+    ],
+  },
+  {
+    day: "Day 3 (9/21 日)",
+    events: [
+      { time: "12:00", title: "🍴 お昼（候補）", detail: "候補から選択", candidates: day2_3LunchCandidates },
+      { time: "13:00", title: "🛍️ 空港ショッピング（お土産）",
+        candidates: [
+          { name: "ANA FESTA（国内線）" },
+          { name: "博多銘品蔵" },
+          { name: "そらもーる商店" },
+          { name: "福太郎（明太子）" },
+          { name: "東雲堂（にわかせんぺい）" },
+        ] },
+      { time: "14:15", title: "🛬 東京組 帰り（飛行機）", detail: "14:15 → 16:05", kind: "flight-in" },
+      { time: "14:50", title: "🛬 名古屋組 帰り（飛行機）", detail: "14:50 → 16:40", kind: "flight-in" },
+    ],
+  },
+];
 
-  <div id="root"></div>
+/* ===== Flight details (compact) ===== */
+const FLOOR_HND = "https://tokyo-haneda.com/floor/index.html";
+const FLOOR_CENTRAIR = "https://www.centrair.jp/map/index.html";
+const CHECKIN_GUIDE = "https://www.starflyer.jp/checkin/boarding/vender.html";
 
-  <script type="text/babel">
-  const { useEffect } = React;
+const FL_OUT = {
+  title: "行き（OUTBOUND）",
+  groups: [
+    { label: "東京組（便名：SFJ047）", code: "SFJ047", book: "3101", conf: "482-743-569", pax: "田中、新井", counter: "第1ターミナル2階SFJカウンター" },
+    { label: "名古屋組1（便名：SFJ063）", code: "SFJ063", book: "3101", conf: "607-330-326", pax: "浅野、宮腰、上堀", counter: "旅客ターミナル3F国内線ANAカウンター" },
+    { label: "名古屋組2（便名：SFJ063）", code: "SFJ063", book: "3104", conf: "197-714-403", pax: "齊藤、森、長沼、重田、前田", counter: "旅客ターミナル3F国内線ANAカウンター" },
+  ],
+};
 
-  /* ===== レイアウト定数（タイムライン） ===== */
-  const TIME_COL = 72;   // px
-  const RAIL_COL = 20;   // px（中央にレール、丸の直径12px）
-  const GRID_GAP = 16;   // 列間
-  const DOT_DIAM = 12;   // 丸の直径
-  const RAIL_OFFSET = -1; // 丸中心と線の微調整（-2〜+2で調整可能）
-  const RAIL_LEFT_PX = TIME_COL + GRID_GAP + (RAIL_COL / 2) + RAIL_OFFSET;
+const FL_IN = {
+  title: "帰り（INBOUND）",
+  groups: [
+    { label: "東京組（便名：SFJ048）", code: "SFJ048", book: "3109", conf: "763-117-264", pax: "新井、田中", counter: "第1ターミナル2階SFJカウンター" },
+    { label: "名古屋組1（便名：SFJ062）", code: "SFJ062", book: "3102", conf: "482-743-329", pax: "浅野、宮腰、上堀", counter: "旅客ターミナル3F国内線ANAカウンター" },
+    { label: "名古屋組2（便名：SFJ062）", code: "SFJ062", book: "3105", conf: "825-237-635", pax: "齊藤、森、長沼、重田、前田", counter: "旅客ターミナル3F国内線ANAカウンター" },
+  ],
+};
 
-  /* ===== Map リンク生成（方針） ===== */
-  const openNew = url => window.open(url, "_blank", "noopener");
-  const buildAppleUrl = (place) => {
-    if (place.lat != null && place.lon != null) {
-      return `https://maps.apple.com/?ll=${place.lat},${place.lon}`;
+/* ===== UI bits ===== */
+const Pill = ({ children, onClick, variant = "light" }) => (
+  <button
+    onClick={onClick}
+    className={
+      variant === "solid"
+        ? "inline-flex items-center gap-1 px-4 py-2 rounded-full bg-gray-900 text-white text-sm"
+        : "inline-flex items-center gap-1 px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
     }
-    return `https://maps.apple.com/?q=${encodeURIComponent(place.name)}`;
-  };
+  >
+    {children}
+  </button>
+);
 
-  /* ===== モーダル（Map） ===== */
-  let currentPlace = null;
-  window.openMapDialog = (place) => {
-    currentPlace = place;
-    document.getElementById("mapPlace").innerText = place.name;
-    document.getElementById("mapDialog").style.display = "flex";
-  };
-  window.closeDialog = () => {
-    document.getElementById("mapDialog").style.display = "none";
-    currentPlace = null;
-  };
-  window.goGoogle = () => { if (currentPlace?.gUrl) openNew(currentPlace.gUrl); closeDialog(); };
-  window.goApple  = () => { if (currentPlace) openNew(buildAppleUrl(currentPlace)); closeDialog(); };
+/* ===== Map Dialog ===== */
+function MapDialog({ open, place, onClose }) {
+  useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; }, [open]);
+  if (!open || !place) return null;
+  return (
+    <div className="fixed inset-0 z-[1000]" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50"></div>
+      <div className="absolute inset-x-4 sm:left-1/2 sm:-translate-x-1/2 top-[15%] max-w-md rounded-2xl bg-white shadow-xl p-5" onClick={(e)=>e.stopPropagation()}>
+        <div className="text-xs text-gray-500">地図を開く</div>
+        <h3 className="text-lg font-semibold mt-1 break-words">{place.name ?? place.label}</h3>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Pill variant="solid" onClick={() => { window.open(mapLink("google", place), "_blank"); onClose(); }}>Google Maps</Pill>
+          <Pill variant="solid" onClick={() => { window.open(mapLink("apple", place), "_blank"); onClose(); }}>Apple Maps</Pill>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Pill onClick={onClose}>閉じる</Pill>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  /* ===== モーダル（Flight） ===== */
-  const HND_MAP = "https://tokyo-haneda.com/floor/index.html";
-  const NGO_MAP = "https://www.centrair.jp/map/index.html";
-  const SFJ_CHECKIN = "https://www.starflyer.jp/checkin/boarding/vender.html";
+/* ===== Flight Drawer (swipe to close ~4cm) ===== */
+const SWIPE_CLOSE_PX = 150; // 約4cm相当
 
-  let flightSheetOpen = false;
+function FlightDrawer({ open, mode, onClose }) {
+  const data = mode === "out" ? FL_OUT : FL_IN;
+  const [expanded, setExpanded] = useState({});
+  const startY = useRef(0);
+  const travel = useRef(0);
+  const panelRef = useRef(null);
+  const dragging = useRef(false);
 
-  // --- スワイプで閉じる用 ---------------
-  let startY = 0, currentY = 0, dragging = false, panelEl = null;
-  const DRAG_CLOSE_THRESHOLD = 120; // これ以上引いたら閉じる
+  useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; }, [open]);
+  useEffect(() => { if (open) setExpanded({}); }, [open, mode]);
 
-  const onDragStart = (y) => {
-    dragging = true;
-    startY = y;
-    currentY = y;
-    panelEl.classList.add('dragging');
+  if (!open) return null;
+
+  const begin = (y) => {
+    dragging.current = true;
+    startY.current = y;
+    travel.current = 0;
+    if (panelRef.current) panelRef.current.style.transition = "none";
   };
-  const onDragMove = (y) => {
-    if (!dragging) return;
-    currentY = y;
-    const delta = Math.max(0, currentY - startY);
-    panelEl.style.transform = `translateY(${delta}px)`;
+  const move = (y) => {
+    if (!dragging.current) return;
+    travel.current = Math.max(0, y - startY.current);
+    if (panelRef.current) panelRef.current.style.transform = `translateY(${travel.current}px)`;
   };
-  const onDragEnd = () => {
-    if (!dragging) return;
-    dragging = false;
-    const delta = Math.max(0, currentY - startY);
-    panelEl.classList.remove('dragging');
-    if (delta > DRAG_CLOSE_THRESHOLD) {
-      closeFlight();
+  const end = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    const d = travel.current;
+    if (panelRef.current) panelRef.current.style.transition = "transform 220ms ease";
+    if (d > SWIPE_CLOSE_PX) {
+      if (typeof onClose === 'function') onClose();
     } else {
-      panelEl.style.transform = 'translateY(0)';
+      if (panelRef.current) panelRef.current.style.transform = "translateY(0)";
+      setTimeout(() => { if (panelRef.current) panelRef.current.style.transition = ""; }, 240);
     }
-  };
-  const attachDragHandlers = () => {
-    // touch
-    panelEl.addEventListener('touchstart', (e)=> onDragStart(e.touches[0].clientY), {passive:true});
-    panelEl.addEventListener('touchmove',  (e)=> onDragMove(e.touches[0].clientY), {passive:true});
-    panelEl.addEventListener('touchend',   onDragEnd);
-    // mouse（PCでも操作可）
-    panelEl.addEventListener('mousedown', (e)=> onDragStart(e.clientY));
-    window.addEventListener('mousemove',  (e)=> onDragMove(e.clientY));
-    window.addEventListener('mouseup',    onDragEnd);
-  };
-  // -------------------------------------
-
-  window.openFlight = (html) => {
-    document.body.style.overflow = "hidden";
-    document.getElementById("flightBody").innerHTML = html;
-    const sheet = document.getElementById("flightSheet");
-    panelEl = document.getElementById("flightPanel");
-    panelEl.style.transform = 'translateY(0)'; // 初期位置
-    sheet.style.display = "flex";
-    flightSheetOpen = true;
-  };
-  window.closeFlight = () => {
-    const sheet = document.getElementById("flightSheet");
-    const body = document.getElementById("flightBody");
-    sheet.style.display = "none";
-    body.innerHTML = "";
-    document.body.style.overflow = "";
-    flightSheetOpen = false;
-    if (panelEl) panelEl.style.transform = 'translateY(0)'; // リセット
+    travel.current = 0;
   };
 
-  /* ===== 候補（各スポット）: name / gUrl / lat / lon ===== */
-  const PLACES = {
-    hotel: {
-      name: "HOTEL 粋 - sui - HARUYOSHI",
-      gUrl: "https://maps.app.goo.gl/SzYhBhZ6TuZbtRbv6",
-      lat: null, lon: null,
-    },
-    exbar: { name: "EXBAR TOKYO plus 博多", gUrl: "https://maps.app.goo.gl/xxxxxxxx", lat: null, lon: null },
-    maruya:{ name: "海鮮居酒屋 まる家 西中洲", gUrl: "https://maps.app.goo.gl/xxxxxxxx", lat: null, lon: null },
-    ohori:{ name:"大濠公園", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    maizuru:{ name:"福岡城跡（舞鶴公園）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    port:{ name:"博多ポートタワー", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    kushida:{ name:"櫛田神社", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    joutenji:{ name:"承天寺通り", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-  };
+  useEffect(() => {
+    const p = panelRef.current;
+    if (!p) return;
+    const onMS = (e) => begin(e.clientY);
+    const onMM = (e) => move(e.clientY);
+    const onMU = () => end();
 
-  const day2_3LunchCandidates = [
-    { name: "元祖 博多めんたい重", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "博多シーフード うお田", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "魚ト肴 いとおかし（春吉）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "ひしむら（春吉）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "大地のうどん 博多駅ちかてん（朝日ビルB2）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-  ];
-  const airportLunchCandidates = [
-    { name: "竹乃屋 福岡空港店", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "ラーメン滑走路（フードホール）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "因幡うどん（福岡空港）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "うまや 福岡空港店", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "B.B.Quisine（国内線3F）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-  ];
+    const onTS = (e) => begin(e.touches[0].clientY);
+    const onTM = (e) => move(e.touches[0].clientY);
+    const onTE = () => end();
 
-  /* ===== タイムライン ===== */
-  const timeline = [
-    {
-      day: "Day 1 (9/19 金)",
-      events: [
-        { time:"12:10", title:"🛫 名古屋発（飛行機）", detail:"12:10 → 13:35", action:"outbound" },
-        { time:"12:15", title:"🛫 東京発（飛行機）",   detail:"12:15 → 14:10", action:"outbound" },
-        { time:"15:00", title:"🍴 お昼", detail:"空港内の候補（10人以上OK）", candidates:airportLunchCandidates },
-        { time:"16:00", title:"🏨 チェックイン", detail: PLACES.hotel.name, place: PLACES.hotel },
-        { time:"16:30", title:"🚴 自転車観光", detail:"大濠公園 / 福岡城跡 / 博多ポートタワー / 櫛田神社 / 承天寺通り など",
-          candidates: [
-            { name: PLACES.ohori.name, gUrl: PLACES.ohori.gUrl, lat:PLACES.ohori.lat, lon:PLACES.ohori.lon },
-            { name: PLACES.maizuru.name, gUrl: PLACES.maizuru.gUrl, lat:PLACES.maizuru.lat, lon:PLACES.maizuru.lon },
-            { name: PLACES.port.name, gUrl: PLACES.port.gUrl, lat:PLACES.port.lat, lon:PLACES.port.lon },
-            { name: PLACES.kushida.name, gUrl: PLACES.kushida.gUrl, lat:PLACES.kushida.lat, lon:PLACES.kushida.lon },
-            { name: PLACES.joutenji.name, gUrl: PLACES.joutenji.gUrl, lat:PLACES.joutenji.lat, lon:PLACES.joutenji.lon },
-          ] },
-        { time:"20:30", title:"🍲 夜ご飯", detail:"元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）",
-          place:{ name:"元祖 もつ鍋 楽天地 天神本店", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null } },
-        { time:"22:00", title:"🕒 自由時間" },
-      ]
-    },
-    {
-      day: "Day 2 (9/20 土)",
-      events: [
-        { time:"12:00", title:"🍴 お昼（候補）", detail:"候補から選択", candidates:day2_3LunchCandidates },
-        { time:"14:00", title:"🎯 アクティビティ", detail: PLACES.exbar.name, place: PLACES.exbar },
-        { time:"18:00", title:"🍺 夜ご飯", detail: PLACES.maruya.name, place: PLACES.maruya },
-        { time:"20:00", title:"🍸 2件目（未定）" },
-        { time:"22:00", title:"🕒 自由時間" },
-      ]
-    },
-    {
-      day: "Day 3 (9/21 日)",
-      events: [
-        { time:"12:00", title:"🍴 お昼（候補）", detail:"候補から選択", candidates: day2_3LunchCandidates },
-        { time:"13:00", title:"🛍️ 空港ショッピング（お土産）",
-          candidates: [
-            { name:"ANA FESTA（国内線）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-            { name:"博多銘品蔵", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-            { name:"そらもーる商店", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-            { name:"福太郎（明太子）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-            { name:"東雲堂（にわかせんぺい）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-          ] },
-        { time:"14:15", title:"🛬 東京組 帰り（飛行機）", detail:"14:15 → 16:05", action:"inbound" },
-        { time:"14:50", title:"🛬 名古屋組 帰り（飛行機）", detail:"14:50 → 16:40", action:"inbound" },
-      ]
-    }
-  ];
+    p.addEventListener("mousedown", onMS);
+    window.addEventListener("mousemove", onMM);
+    window.addEventListener("mouseup", onMU);
+    p.addEventListener("touchstart", onTS, { passive: true });
+    p.addEventListener("touchmove", onTM, { passive: true });
+    p.addEventListener("touchend", onTE);
 
-  /* ===== 便情報（モーダル用 HTML を返す） ===== */
-  const flightHtml = (kind="outbound") => {
-    const head =
-      `<div class="text-lg font-bold mb-2">${kind==="outbound"?"行き（OUTBOUND）":"帰り（INBOUND）"}</div>
-       <div class="flex gap-2 mb-3">
-         <a class="px-3 py-2 rounded-lg border" href="${HND_MAP}" target="_blank" rel="noopener">羽田フロアマップ</a>
-         <a class="px-3 py-2 rounded-lg border" href="${NGO_MAP}" target="_blank" rel="noopener">セントレアフロアマップ</a>
-       </div>
-       <a class="inline-block px-4 py-3 rounded-lg bg-black text-white font-semibold mb-2" href="${SFJ_CHECKIN}" target="_blank" rel="noopener">チェックイン方法</a>
-       <p class="text-xs text-gray-600 mb-2">※ 集合は出発の<b>60分前</b>。<b>予約番号・確認番号</b>を準備しておく。</p>`;
-
-    const rows = (title, data) => `
-      <details>
-        <summary>${title}</summary>
-        <div class="card text-sm leading-7">
-          <div><b>予約番号</b>：${data.reserve}</div>
-          <div><b>確認番号</b>：${data.confirm}</div>
-          <div><b>搭乗者</b>：${data.names}</div>
-          <div><b>チェックイン場所</b>：${data.checkin}</div>
-        </div>
-      </details>`;
-
-    if (kind==="outbound") {
-      return head
-      + rows("東京組（便名：SFJ047）", {reserve:"3101", confirm:"482-743-569", names:"田中、新井", checkin:"第1ターミナル2階 SFJカウンター"})
-      + rows("名古屋組1（便名：SFJ063）", {reserve:"3101", confirm:"607-330-326", names:"浅野、宮腰、上堀", checkin:"旅客ターミナル3F 国内線 ANAカウンター"})
-      + rows("名古屋組2（便名：SFJ063）", {reserve:"3104", confirm:"197-714-403", names:"齊藤、森、長沼、重田、前田", checkin:"旅客ターミナル3F 国内線 ANAカウンター"});
-    }
-    return head
-      + rows("東京組（便名：SFJ048）", {reserve:"3109", confirm:"763-117-264", names:"新井、田中", checkin:"第1ターミナル2階 SFJカウンター"})
-      + rows("名古屋組1（便名：SFJ062）", {reserve:"3102", confirm:"482-743-329", names:"浅野、宮腰、上堀", checkin:"旅客ターミナル3F 国内線 ANAカウンター"})
-      + rows("名古屋組2（便名：SFJ062）", {reserve:"3105", confirm:"825-237-635", names:"齊藤、森、長沼、重田、前田", checkin:"旅客ターミナル3F 国内線 ANAカウンター"});
-  };
-
-  /* ===== UI ===== */
-  const Pill = ({children,onClick,variant="default"})=>{
-    const base = "inline-block px-4 py-2 rounded-full text-sm";
-    const cls  = variant==="ghost"
-      ? base+" border bg-white hover:bg-gray-50"
-      : base+" bg-gray-100 hover:bg-gray-200 text-gray-800";
-    return <button onClick={onClick} className={cls}>{children}</button>;
-  };
-
-  function EventRow({ time, title, detail, place, candidates, action }) {
-    const openAction = () => {
-      if (action==="outbound") return openFlight(flightHtml("outbound"));
-      if (action==="inbound")  return openFlight(flightHtml("inbound"));
+    return () => {
+      p.removeEventListener("mousedown", onMS);
+      window.removeEventListener("mousemove", onMM);
+      window.removeEventListener("mouseup", onMU);
+      p.removeEventListener("touchstart", onTS);
+      p.removeEventListener("touchmove", onTM);
+      p.removeEventListener("touchend", onTE);
     };
+  }, [open]);
 
-    return (
+  return () => {
+      p.removeEventListener("mousedown", onMS);
+      window.removeEventListener("mousemove", onMM);
+      window.removeEventListener("mouseup", onMU);
+      p.removeEventListener("touchstart", onTS);
+      p.removeEventListener("touchmove", onTM);
+      p.removeEventListener("touchend", onTE);
+    };
+  }, [open]);
+
+  return (
+    <div className="fixed inset-0 z-[1000]" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50"></div>
       <div
-        className="grid items-center mb-8"
-        style={{ gridTemplateColumns: `${TIME_COL}px ${RAIL_COL}px 1fr`, columnGap: `${GRID_GAP}px` }}
+        ref={panelRef}
+        className="absolute inset-x-0 bottom-0 max-h-[82vh] bg-white rounded-t-3xl shadow-2xl p-5 overflow-auto"
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-right font-bold text-gray-800 tabular-nums">{time}</div>
-        <div className="relative flex items-center justify-center">
-          <div className="w-[12px] h-[12px] bg-blue-600 rounded-full"></div>
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-300" />
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold">{data.title}</h3>
         </div>
-        <div className="bg-white rounded-2xl shadow p-4">
-          <div className="font-semibold text-gray-900 text-lg">{title}</div>
-          {detail && <div className="text-sm text-gray-600 mt-1">{detail}</div>}
-          {action && (<div className="mt-3"><Pill variant="ghost" onClick={openAction}>詳細を開く</Pill></div>)}
-          {!action && place && (
-            <div className="mt-3"><Pill onClick={()=>openMapDialog(place)}>地図を開く</Pill></div>
-          )}
-          {candidates && (
-            <div className="mt-3">
-              <div className="text-xs text-gray-500 mb-2">候補（タップでマップを選択）</div>
-              <div className="flex flex-wrap gap-2">
-                {candidates.map((s,i)=>(<Pill key={i} onClick={()=>openMapDialog(s)}>{s.name}</Pill>))}
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <a className="block rounded-xl border border-gray-200 px-3 py-2 text-center hover:bg-gray-50" href={FLOOR_HND} target="_blank" rel="noreferrer">羽田フロアマップ</a>
+          <a className="block rounded-xl border border-gray-200 px-3 py-2 text-center hover:bg-gray-50" href={FLOOR_CENTRAIR} target="_blank" rel="noreferrer">セントレアフロアマップ</a>
+          <a className="col-span-2 block rounded-xl bg-gray-900 text-white px-3 py-2 text-center" href={CHECKIN_GUIDE} target="_blank" rel="noreferrer">チェックイン方法</a>
+        </div>
+        <p className="mt-3 text-[13px] text-gray-600">※ 集合は出発の<strong className="font-semibold">60分前</strong>。予約番号・確認番号を準備しておく。</p>
+
+        <div className="mt-4 space-y-3">
+          {(mode === "out" ? FL_OUT.groups : FL_IN.groups).map((g, idx) => (
+            <details key={idx} className="rounded-2xl border border-gray-200 overflow-hidden">
+              <summary className="cursor-pointer px-4 py-3 font-semibold select-none">{g.label}</summary>
+              <div className="px-4 pb-4 pt-1 text-[15px] leading-7 grid grid-cols-[120px_1fr] gap-x-3">
+                <div className="text-gray-500">予約番号</div><div>{g.book}</div>
+                <div className="text-gray-500">確認番号</div><div>{g.conf}</div>
+                <div className="text-gray-500">搭乗者</div><div>{g.pax}</div>
+                <div className="text-gray-500">チェックイン場所</div><div>{g.counter}</div>
               </div>
+            </details>
+          ))}
+        </div>
+
+        <div className="mt-5 flex justify-center">
+          <button className="rounded-full bg-gray-900 text-white px-5 py-2" onClick={onClose}>閉じる</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===== Timeline row ===== */
+const TIME_COL = 72; // px
+const RAIL_COL = 20; // px
+const GRID_GAP = 16; // px
+const RAIL_OFFSET = -1; // tweak if blue dot not centered
+const RAIL_LEFT_PX = TIME_COL + GRID_GAP + RAIL_COL / 2 + RAIL_OFFSET;
+
+function EventRow({ ev, openMap, openFlight }) {
+  return (
+    <div className="grid items-center mb-8" style={{ gridTemplateColumns: `${TIME_COL}px ${RAIL_COL}px 1fr`, columnGap: `${GRID_GAP}px` }}>
+      <div className="text-right font-bold text-gray-800 tabular-nums">{ev.time}</div>
+      <div className="relative flex items-center justify-center">
+        <div className="w-3 h-3 bg-blue-600 rounded-full" />
+      </div>
+      <div className="bg-white rounded-2xl shadow p-4">
+        <div className="font-semibold text-gray-900 text-lg">{ev.title}</div>
+        {ev.detail && <div className="text-sm text-gray-600 mt-1">{ev.detail}</div>}
+        {ev.place && (
+          <div className="mt-3"><Pill onClick={() => openMap(ev.place)}>地図を開く</Pill></div>
+        )}
+        {ev.candidates && (
+          <div className="mt-3">
+            <div className="text-xs text-gray-500 mb-2">候補（タップでマップを選択）</div>
+            <div className="flex flex-wrap gap-2">
+              {ev.candidates.map((c, i) => (
+                <Pill key={i} onClick={() => openMap({ name: c.name })}>{c.name}</Pill>
+              ))}
             </div>
-          )}
+          </div>
+        )}
+        {(ev.kind || ev.action) && (
+          <div className="mt-3"><Pill onClick={() => (()=>{ const k = ev.kind || ev.action; const m = (k === "flight-out" || k === "outbound" || k === "out") ? "out" : "in"; openFlight(m); })()}>便の詳細</Pill></div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DaySection({ day, events, openMap, openFlight }) {
+  return (
+    <div className="mb-12">
+      <h2 className="text-xl font-semibold mb-6 border-b pb-2">{day}</h2>
+      <div className="relative">
+        <div className="absolute bg-gray-300" style={{ left: `${RAIL_LEFT_PX}px`, top: 10, bottom: 10, width: 2, borderRadius: 9999 }} />
+        <div>
+          {events.map((ev, i) => (
+            <EventRow key={i} ev={ev} openMap={openMap} openFlight={openFlight} />
+          ))}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  function DaySection({ day, events }) {
-    return (
-      <div className="mb-12">
-        <h2 className="text-xl font-semibold mb-6 border-b pb-2">{day}</h2>
-        <div className="relative">
-          <div className="absolute bg-gray-300" style={{ left:`${RAIL_LEFT_PX}px`, top:10, bottom:10, width:2, borderRadius:9999 }}></div>
-          <div>{events.map((ev,i)=>(<EventRow key={i} {...ev} />))}</div>
-        </div>
-      </div>
-    );
-  }
+export default function App() {
+  const [mapOpen, setMapOpen] = useState(false);
+  const [mapPlace, setMapPlace] = useState(null);
+  const [flightOpen, setFlightOpen] = useState(false);
+  const [flightMode, setFlightMode] = useState("out");
 
-  function App(){
-    useEffect(()=>{
-      if("serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); }
-      // ドラッグハンドラの初期化
-      const el = document.getElementById('flightPanel');
-      if (el) { panelEl = el; attachDragHandlers(); }
-    },[]);
-    return (
-      <div className="p-6 md:p-8 w-full min-h-screen flex flex-col items-center"
-           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
-        <h1 className="text-3xl font-bold tracking-wide mt-2">福岡旅行</h1>
+  const openMap = (place) => { setMapPlace(place); setMapOpen(true); };
+  const openFlight = (mode) => { setFlightMode(mode); setFlightOpen(true); };
+
+  return (
+    <div className="min-h-screen w-full flex flex-col items-center bg-gray-100 text-gray-900" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
+      <header className="w-full max-w-4xl px-6 md:px-8">
+        <h1 className="text-3xl font-extrabold tracking-wide mt-2">福岡旅行</h1>
         <p className="text-sm text-gray-600 mb-6">期間：2025.09.19 - 2025.09.21</p>
-        <div className="w-full max-w-4xl">
-          {timeline.map((d,idx)=>(<DaySection key={idx} {...d} />))}
-        </div>
-        <footer className="mt-2 text-xs text-gray-500 text-center pb-10">
-          📌 iPhoneでホーム画面に追加：Safariで開く → 共有（□に↑）→ <b>ホーム画面に追加</b>
-        </footer>
-      </div>
-    );
-  }
+      </header>
 
-  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-  </script>
-</body>
-</html>
+      <main className="w-full max-w-4xl px-6 md:px-8">
+        {timeline.map((d, idx) => (
+          <DaySection key={idx} {...d} openMap={openMap} openFlight={openFlight} />
+        ))}
+      </main>
+
+      <footer className="mt-2 text-xs text-gray-500 text-center pb-10 px-6">
+        📌 iPhoneでホーム画面に追加：Safariで開く → 共有（□に↑）→ <b>ホーム画面に追加</b>
+      </footer>
+
+      {/* dialogs */}
+      <MapDialog open={mapOpen} place={mapPlace} onClose={() => setMapOpen(false)} />
+      <FlightDrawer open={flightOpen} mode={flightMode} onClose={() => setFlightOpen(false)} />
+    </div>
+  );
+}

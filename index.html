@@ -57,7 +57,7 @@
     </div>
   </div>
 
-  <!-- Flight モーダル（行き／帰り） -->
+  <!-- Flight モーダル -->
   <div id="flightSheet" onclick="closeFlight()">
     <div id="flightPanel" class="sheet" onclick="event.stopPropagation()">
       <div class="bar"></div>
@@ -72,24 +72,25 @@
   const { useEffect } = React;
 
   /* ===== レイアウト定数（タイムライン） ===== */
-  const TIME_COL = 72;   // px
-  const RAIL_COL = 20;   // px（中央にレール、丸の直径12px）
-  const GRID_GAP = 16;   // 列間
-  const DOT_DIAM = 12;   // 丸の直径
-  const RAIL_OFFSET = -1; // 丸中心と線の微調整（-2〜+2で調整可能）
+  const TIME_COL = 72;      // px
+  const RAIL_COL = 20;      // px（中央にレール、丸の直径12px）
+  const GRID_GAP = 16;      // 列間
+  const DOT_DIAM = 12;      // 丸の直径（今は未使用だが記録）
+  const RAIL_OFFSET = -1;   // 丸中心と線の微調整（-2〜+2で調整可能）
   const RAIL_LEFT_PX = TIME_COL + GRID_GAP + (RAIL_COL / 2) + RAIL_OFFSET;
 
   /* ===== Map リンク生成 ===== */
   const openNew = url => window.open(url, "_blank", "noopener");
 
+  // Apple: 可能なら座標、なければ名前
   const buildAppleUrl = (place) => {
-    if (place.lat != null && place.lon != null) {
+    if (place?.lat != null && place?.lon != null) {
       return `https://maps.apple.com/?ll=${place.lat},${place.lon}`;
     }
-    return `https://maps.apple.com/?q=${encodeURIComponent(place.name)}`;
+    return `https://maps.apple.com/?q=${encodeURIComponent(place?.name || "")}`;
   };
 
-  // Googleマップ用URL（短縮URLは使わず常に公式の search API に正規化）
+  // Google: place_id > 座標 > 名前 の順で正規化
   const buildGoogleUrl = (place) => {
     if (place?.gPlaceId) {
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}&query_place_id=${place.gPlaceId}`;
@@ -119,53 +120,53 @@
   const NGO_MAP = "https://www.centrair.jp/map/index.html";
   const SFJ_CHECKIN = "https://www.starflyer.jp/checkin/boarding/vender.html";
 
-  let flightSheetOpen = false;
+  // スワイプで閉じる（中身が一番上のときのみ 120px で閉じる）
+  let startY = 0, currentY = 0, dragging = false, panelEl = null, bodyEl = null;
+  const DRAG_CLOSE_THRESHOLD = 120; // 約4cm
+  const ARM_DISTANCE = 8;           // これ以上下に動いたらドラッグ開始
 
-  // --- スワイプで閉じる用 ---------------
-  let startY = 0, currentY = 0, dragging = false, panelEl = null;
-  const DRAG_CLOSE_THRESHOLD = 120;
-
-  const onDragStart = (y) => {
-    dragging = true;
-    startY = y;
+  const onDragStart = (y) => { startY = y; currentY = y; dragging = false; };
+  const onDragMove  = (y) => {
     currentY = y;
-    panelEl.classList.add('dragging');
-  };
-  const onDragMove = (y) => {
-    if (!dragging) return;
-    currentY = y;
-    const delta = Math.max(0, currentY - startY);
-    panelEl.style.transform = `translateY(${delta}px)`;
+    const dy = currentY - startY;
+    if (bodyEl && bodyEl.scrollTop > 0) return; // 上端でなければ閉じ動作しない
+    if (!dragging && dy > ARM_DISTANCE) {
+      dragging = true;
+      panelEl.classList.add('dragging');
+    }
+    if (dragging) {
+      const delta = Math.max(0, dy);
+      panelEl.style.transform = `translateY(${delta}px)`;
+    }
   };
   const onDragEnd = () => {
     if (!dragging) return;
     dragging = false;
-    const delta = Math.max(0, currentY - startY);
+    const dy = Math.max(0, currentY - startY);
     panelEl.classList.remove('dragging');
-    if (delta > DRAG_CLOSE_THRESHOLD) {
-      closeFlight();
-    } else {
-      panelEl.style.transform = 'translateY(0)';
-    }
+    if (dy > DRAG_CLOSE_THRESHOLD) closeFlight();
+    else panelEl.style.transform = 'translateY(0)';
   };
   const attachDragHandlers = () => {
+    bodyEl = document.getElementById("flightBody");
+    panelEl = document.getElementById("flightPanel");
+    // touch
     panelEl.addEventListener('touchstart', (e)=> onDragStart(e.touches[0].clientY), {passive:true});
-    panelEl.addEventListener('touchmove',  (e)=> onDragMove(e.touches[0].clientY), {passive:true});
+    panelEl.addEventListener('touchmove',  (e)=> onDragMove(e.touches[0].clientY),  {passive:true});
     panelEl.addEventListener('touchend',   onDragEnd);
+    // mouse
     panelEl.addEventListener('mousedown', (e)=> onDragStart(e.clientY));
     window.addEventListener('mousemove',  (e)=> onDragMove(e.clientY));
     window.addEventListener('mouseup',    onDragEnd);
   };
-  // -------------------------------------
 
   window.openFlight = (html) => {
     document.body.style.overflow = "hidden";
     document.getElementById("flightBody").innerHTML = html;
-    const sheet = document.getElementById("flightSheet");
-    panelEl = document.getElementById("flightPanel");
+    document.getElementById("flightSheet").style.display = "flex";
+    // 初期化（handlers は初回だけでもOKだが簡便に毎回呼んでも問題なし）
+    attachDragHandlers();
     panelEl.style.transform = 'translateY(0)';
-    sheet.style.display = "flex";
-    flightSheetOpen = true;
   };
   window.closeFlight = () => {
     const sheet = document.getElementById("flightSheet");
@@ -173,39 +174,40 @@
     sheet.style.display = "none";
     body.innerHTML = "";
     document.body.style.overflow = "";
-    flightSheetOpen = false;
     if (panelEl) panelEl.style.transform = 'translateY(0)';
   };
 
-  /* ===== 候補（各スポット） ===== */
+  /* ===== 候補（各スポット）: name / gPlaceId? / lat / lon ===== */
   const PLACES = {
+    // ★ 確実に同じ場所を開きたい場合は gPlaceId を入れるか、lat/lon を正確に入れてください
     hotel: {
       name: "HOTEL 粋 - sui - HARUYOSHI",
-      gUrl: "https://maps.app.goo.gl/SzYhBhZ6TuZbtRbv6",
-      lat: null, lon: null,
+      // gPlaceId: "（分かればここに）",
+      lat: 33.587795,   // ←福岡・春吉の例。必要に応じて置き換え
+      lon: 130.405640,
     },
-    exbar: { name: "EXBAR TOKYO plus 博多", gUrl: "https://maps.app.goo.gl/xxxxxxxx", lat: null, lon: null },
-    maruya:{ name: "海鮮居酒屋 まる家 西中洲", gUrl: "https://maps.app.goo.gl/xxxxxxxx", lat: null, lon: null },
-    ohori:{ name:"大濠公園", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    maizuru:{ name:"福岡城跡（舞鶴公園）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    port:{ name:"博多ポートタワー", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    kushida:{ name:"櫛田神社", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    joutenji:{ name:"承天寺通り", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
+    exbar:   { name: "EXBAR TOKYO plus 博多" },
+    maruya:  { name: "海鮮居酒屋 まる家 西中洲" },
+    ohori:   { name: "大濠公園" },
+    maizuru: { name: "福岡城跡（舞鶴公園）" },
+    port:    { name: "博多ポートタワー" },
+    kushida: { name: "櫛田神社" },
+    joutenji:{ name: "承天寺通り" },
   };
 
   const day2_3LunchCandidates = [
-    { name: "元祖 博多めんたい重", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "博多シーフード うお田", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "魚ト肴 いとおかし（春吉）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "ひしむら（春吉）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "大地のうどん 博多駅ちかてん（朝日ビルB2）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
+    { name: "元祖 博多めんたい重" },
+    { name: "博多シーフード うお田" },
+    { name: "魚ト肴 いとおかし（春吉）" },
+    { name: "ひしむら（春吉）" },
+    { name: "大地のうどん 博多駅ちかてん（朝日ビルB2）" },
   ];
   const airportLunchCandidates = [
-    { name: "竹乃屋 福岡空港店", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "ラーメン滑走路（フードホール）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "因幡うどん（福岡空港）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "うまや 福岡空港店", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-    { name: "B.B.Quisine（国内線3F）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
+    { name: "竹乃屋 福岡空港店" },
+    { name: "ラーメン滑走路（フードホール）" },
+    { name: "因幡うどん（福岡空港）" },
+    { name: "うまや 福岡空港店" },
+    { name: "B.B.Quisine（国内線3F）" },
   ];
 
   /* ===== タイムライン ===== */
@@ -218,15 +220,8 @@
         { time:"15:00", title:"🍴 お昼", detail:"空港内の候補（10人以上OK）", candidates:airportLunchCandidates },
         { time:"16:00", title:"🏨 チェックイン", detail: PLACES.hotel.name, place: PLACES.hotel },
         { time:"16:30", title:"🚴 自転車観光", detail:"大濠公園 / 福岡城跡 / 博多ポートタワー / 櫛田神社 / 承天寺通り など",
-          candidates: [
-            { name: PLACES.ohori.name, gUrl: PLACES.ohori.gUrl, lat:PLACES.ohori.lat, lon:PLACES.ohori.lon },
-            { name: PLACES.maizuru.name, gUrl: PLACES.maizuru.gUrl, lat:PLACES.maizuru.lat, lon:PLACES.maizuru.lon },
-            { name: PLACES.port.name, gUrl: PLACES.port.gUrl, lat:PLACES.port.lat, lon:PLACES.port.lon },
-            { name: PLACES.kushida.name, gUrl: PLACES.kushida.gUrl, lat:PLACES.kushida.lat, lon:PLACES.kushida.lon },
-            { name: PLACES.joutenji.name, gUrl: PLACES.joutenji.gUrl, lat:PLACES.joutenji.lat, lon:PLACES.joutenji.lon },
-          ] },
-        { time:"20:30", title:"🍲 夜ご飯", detail:"元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）",
-          place:{ name:"元祖 もつ鍋 楽天地 天神本店", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null } },
+          candidates:[PLACES.ohori, PLACES.maizuru, PLACES.port, PLACES.kushida, PLACES.joutenji] },
+        { time:"20:30", title:"🍲 夜ご飯", detail:"元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）", place:{name:"元祖 もつ鍋 楽天地 天神本店"} },
         { time:"22:00", title:"🕒 自由時間" },
       ]
     },
@@ -245,12 +240,12 @@
       events: [
         { time:"12:00", title:"🍴 お昼（候補）", detail:"候補から選択", candidates: day2_3LunchCandidates },
         { time:"13:00", title:"🛍️ 空港ショッピング（お土産）",
-          candidates: [
-            { name:"ANA FESTA（国内線）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-            { name:"博多銘品蔵", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-            { name:"そらもーる商店", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-            { name:"福太郎（明太子）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
-            { name:"東雲堂（にわかせんぺい）", gUrl:"https://maps.app.goo.gl/xxxxxxxx", lat:null, lon:null },
+          candidates:[
+            { name:"ANA FESTA（国内線）" },
+            { name:"博多銘品蔵" },
+            { name:"そらもーる商店" },
+            { name:"福太郎（明太子）" },
+            { name:"東雲堂（にわかせんぺい）" },
           ] },
         { time:"14:15", title:"🛬 東京組 帰り（飛行機）", detail:"14:15 → 16:05", action:"inbound" },
         { time:"14:50", title:"🛬 名古屋組 帰り（飛行機）", detail:"14:50 → 16:40", action:"inbound" },
@@ -258,7 +253,7 @@
     }
   ];
 
-  /* ===== 便情報（モーダル用 HTML を返す） ===== */
+  /* ===== 便情報（モーダル用 HTML） ===== */
   const flightHtml = (kind="outbound") => {
     const head =
       `<div class="text-lg font-bold mb-2">${kind==="outbound"?"行き（OUTBOUND）":"帰り（INBOUND）"}</div>
@@ -270,7 +265,7 @@
        <p class="text-xs text-gray-600 mb-2">※ 集合は出発の<b>60分前</b>。<b>予約番号・確認番号</b>を準備しておく。</p>`;
 
     const rows = (title, data) => `
-      <details>
+      <details open>
         <summary>${title}</summary>
         <div class="card text-sm leading-7">
           <div><b>予約番号</b>：${data.reserve}</div>
@@ -319,10 +314,13 @@
         <div className="bg-white rounded-2xl shadow p-4">
           <div className="font-semibold text-gray-900 text-lg">{title}</div>
           {detail && <div className="text-sm text-gray-600 mt-1">{detail}</div>}
+
           {action && (<div className="mt-3"><Pill variant="ghost" onClick={openAction}>詳細を開く</Pill></div>)}
+
           {!action && place && (
             <div className="mt-3"><Pill onClick={()=>openMapDialog(place)}>地図を開く</Pill></div>
           )}
+
           {candidates && (
             <div className="mt-3">
               <div className="text-xs text-gray-500 mb-2">候補（タップでマップを選択）</div>
@@ -351,8 +349,6 @@
   function App(){
     useEffect(()=>{
       if("serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); }
-      const el = document.getElementById('flightPanel');
-      if (el) { panelEl = el; attachDragHandlers(); }
     },[]);
     return (
       <div className="p-6 md:p-8 w-full min-h-screen flex flex-col items-center"

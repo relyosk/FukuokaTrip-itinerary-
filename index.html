@@ -20,52 +20,211 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
-    /* 3択ダイアログ */
-    #mapDialog{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
-    #mapDialog .panel{width:92%;max-width:340px;background:#fff;border-radius:16px;padding:16px 16px 12px;box-shadow:0 10px 25px rgba(0,0,0,.18)}
-    #mapDialog h3{font-size:16px;font-weight:600;margin:4px 0 10px;word-break:keep-all}
-    #mapDialog .btn{width:100%;border:none;border-radius:10px;padding:12px 14px;font-size:15px;margin-top:8px}
-    #mapDialog .google{background:#4285F4;color:#fff}
-    #mapDialog .apple{background:#111;color:#fff}
-    #mapDialog .cancel{background:#e5e7eb;color:#111}
+    /* === 共通：モーダル === */
+    .dlg-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1000}
+    .dlg-panel{width:min(680px,92vw);background:#fff;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+    .dlg-head{padding:16px 20px;border-bottom:1px solid #e5e7eb}
+    .dlg-body{padding:16px 20px}
+    .dlg-foot{padding:12px 20px;border-top:1px solid #e5e7eb}
+    .btn{display:inline-flex;align-items:center;justify-content:center;border-radius:10px;padding:10px 14px;font-weight:600}
+    .btn-solid{background:#111;color:#fff}
+    .btn-outline{border:1px solid #d1d5db;color:#111;background:#fff}
+    .btn-ghost{background:#f3f4f6;color:#111}
+    .tag{display:inline-block;padding:.35rem .8rem;border-radius:9999px;background:#f3f4f6}
+    .acc{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+    .acc-h{display:flex;gap:.6rem;align-items:center;justify-content:space-between;padding:12px 14px;background:#fafafa;cursor:pointer}
+    .acc-b{padding:12px 14px;border-top:1px solid #e5e7eb}
   </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
-  <!-- 3択ダイアログ -->
-  <div id="mapDialog" onclick="closeDialog()">
-    <div class="panel" onclick="event.stopPropagation()">
-      <div class="text-xs text-gray-500">地図を開く</div>
-      <h3 id="mapPlace">場所名</h3>
-      <button class="btn google" onclick="goGoogle()">Google Map</button>
-      <button class="btn apple"  onclick="goApple()">Apple Map</button>
-      <button class="btn cancel" onclick="closeDialog()">戻る</button>
+  <!-- スポット用：マップ3択ダイアログ -->
+  <div id="mapDialog" class="dlg-backdrop" onclick="closeMapDlg()">
+    <div class="dlg-panel max-w-sm" onclick="event.stopPropagation()">
+      <div class="dlg-head">
+        <div class="text-xs text-gray-500">地図を開く</div>
+        <h3 id="mapPlace" class="text-lg font-semibold">場所名</h3>
+      </div>
+      <div class="dlg-body space-y-2">
+        <button class="btn btn-solid w-full" onclick="goGoogle()">Google Map</button>
+        <button class="btn btn-ghost w-full" onclick="goApple()">Apple Map</button>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn btn-outline w-full" onclick="closeMapDlg()">戻る</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- フライト詳細ダイアログ（フォーマル） -->
+  <div id="flightDialog" class="dlg-backdrop" onclick="closeFlightDlg()">
+    <div class="dlg-panel" onclick="event.stopPropagation()">
+      <div class="dlg-head flex items-center justify-between">
+        <div>
+          <div class="text-xs text-gray-500">フライト詳細</div>
+          <h3 id="flightTitle" class="text-lg font-semibold">行き（OUTBOUND）</h3>
+        </div>
+        <button class="btn btn-outline" onclick="closeFlightDlg()">閉じる</button>
+      </div>
+
+      <div class="dlg-body space-y-4">
+        <!-- リンク群 -->
+        <div class="flex flex-wrap gap-2">
+          <a class="btn btn-outline" target="_blank" rel="noopener" href="https://tokyo-haneda.com/floor/index.html">羽田フロアマップ</a>
+          <a class="btn btn-outline" target="_blank" rel="noopener" href="https://www.centrair.jp/map/index.html">セントレアフロアマップ</a>
+          <a class="btn btn-solid"   target="_blank" rel="noopener" href="https://www.starflyer.jp/checkin/boarding/vender.html">チェックイン方法</a>
+        </div>
+
+        <p class="text-xs text-gray-600">
+          ※ 集合は出発の<strong>60分前</strong>。<strong>予約番号・確認番号</strong>を準備しておく。
+        </p>
+
+        <!-- アコーディオン（JSで差し込む） -->
+        <div id="flightAccordion" class="space-y-3"></div>
+      </div>
+
+      <div class="dlg-foot text-right">
+        <button class="btn btn-outline" onclick="closeFlightDlg()">閉じる</button>
+      </div>
     </div>
   </div>
 
   <div id="root"></div>
 
   <script type="text/babel">
-  const { useEffect } = React;
+  const { useEffect, useState } = React;
 
-  /* ---- レイアウト定数（時間列/レール列の幅） ---- */
+  /* ===== レイアウト定数（時間列/レール列の幅） ===== */
   const TIME_COL = 72;   // px
   const RAIL_COL = 20;   // px（中央にレール、丸の直径12px）
   const GRID_GAP = 16;   // 列間の隙間
-  const DOT_DIAM = 12;   // 丸の直径
+  const RAIL_OFFSET = -1; // -2〜+2 で微調整（青丸中心とレールを合わせる）
+  const RAIL_LEFT_PX = TIME_COL + GRID_GAP + (RAIL_COL/2) + RAIL_OFFSET;
 
-  const RAIL_OFFSET = -1; // -2〜+2 くらいで調整
-  const RAIL_LEFT_PX = TIME_COL + GRID_GAP + (RAIL_COL / 2) + RAIL_OFFSET;
-
-  /* ---- マップダイアログ ---- */
+  /* ===== スポット用ダイアログ ===== */
   const gSearch = q => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
   const aSearch = q => `https://maps.apple.com/?q=${encodeURIComponent(q)}`;
   let currentPlace = "";
-  window.openMapDialog = (place)=>{ currentPlace=place; document.getElementById("mapPlace").innerText=place; document.getElementById("mapDialog").style.display="flex"; };
-  window.closeDialog = ()=>{ document.getElementById("mapDialog").style.display="none"; currentPlace=""; };
-  window.goGoogle = ()=>{ window.open(gSearch(currentPlace), "_blank"); closeDialog(); };
-  window.goApple  = ()=>{ window.open(aSearch(currentPlace), "_blank"); closeDialog(); };
+  window.openMapDlg = (place)=>{ currentPlace=place; document.getElementById("mapPlace").innerText=place; document.getElementById("mapDialog").style.display="flex"; };
+  window.closeMapDlg = ()=>{ document.getElementById("mapDialog").style.display="none"; currentPlace=""; };
+  window.goGoogle = ()=>{ window.open(gSearch(currentPlace), "_blank"); closeMapDlg(); };
+  window.goApple  = ()=>{ window.open(aSearch(currentPlace), "_blank"); closeMapDlg(); };
 
-  /* ---- データ ---- */
+  /* ===== フライトデータ ===== */
+  const flights = {
+    outbound: {
+      title: "行き（OUTBOUND）",
+      groups: [
+        {
+          label: "東京組（便名：SFJ047）",
+          rows: [
+            ["予約番号", "3101"],
+            ["確認番号", "482-743-569"],
+            ["搭乗者", "田中、新井"],
+            ["チェックイン場所", "第1ターミナル2階SFJカウンター"]
+          ]
+        },
+        {
+          label: "名古屋組1（便名：SFJ063）",
+          rows: [
+            ["予約番号", "3101"],
+            ["確認番号", "607-330-326"],
+            ["搭乗者", "浅野、宮腰、上堀"],
+            ["チェックイン場所", "旅客ターミナル3F国内線ANAカウンター"]
+          ]
+        },
+        {
+          label: "名古屋組2（便名：SFJ063）",
+          rows: [
+            ["予約番号", "3104"],
+            ["確認番号", "197-714-403"],
+            ["搭乗者", "齊藤、森、長沼、重田、前田"],
+            ["チェックイン場所", "旅客ターミナル3F国内線ANAカウンター"]
+          ]
+        }
+      ]
+    },
+    inbound: {
+      title: "帰り（INBOUND）",
+      groups: [
+        {
+          label: "東京組（便名：SFJ048）",
+          rows: [
+            ["予約番号", "3109"],
+            ["確認番号", "763-117-264"],
+            ["搭乗者", "新井、田中"],
+            ["チェックイン場所", "第1ターミナル2階SFJカウンター"]
+          ]
+        },
+        {
+          label: "名古屋組1（便名：SFJ062）",
+          rows: [
+            ["予約番号", "3102"],
+            ["確認番号", "482-743-329"],
+            ["搭乗者", "浅野、宮腰、上堀"],
+            ["チェックイン場所", "旅客ターミナル3F国内線ANAカウンター"]
+          ]
+        },
+        {
+          label: "名古屋組2（便名：SFJ062）",
+          rows: [
+            ["予約番号", "3105"],
+            ["確認番号", "825-237-635"],
+            ["搭乗者", "齊藤、森、長沼、重田、前田"],
+            ["チェックイン場所", "旅客ターミナル3F国内線ANAカウンター"]
+          ]
+        }
+      ]
+    }
+  };
+
+  // フライトダイアログ生成
+  function openFlightDlg(kind){ // 'outbound' | 'inbound'
+    const data = flights[kind];
+    const titleEl = document.getElementById("flightTitle");
+    const acc = document.getElementById("flightAccordion");
+    titleEl.textContent = data.title;
+    acc.innerHTML = "";
+
+    data.groups.forEach((g, idx) => {
+      const box = document.createElement("div");
+      box.className = "acc";
+      const head = document.createElement("div");
+      head.className = "acc-h";
+      head.innerHTML = `<div class="font-medium">${g.label}</div>
+                        <svg width="18" height="18" viewBox="0 0 24 24" class="shrink-0 text-gray-500">
+                          <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>`;
+      const body = document.createElement("div");
+      body.className = "acc-b hidden";
+
+      // rows -> 表
+      const table = document.createElement("table");
+      table.className = "w-full text-sm";
+      g.rows.forEach(([k,v])=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td class="py-1 pr-3 text-gray-500 whitespace-nowrap">${k}</td>
+                        <td class="py-1">${v}</td>`;
+        table.appendChild(tr);
+      });
+      body.appendChild(table);
+
+      head.addEventListener("click", ()=>{
+        body.classList.toggle("hidden");
+      });
+
+      box.appendChild(head);
+      box.appendChild(body);
+      acc.appendChild(box);
+
+      // 最初のセクションだけ開く
+      if(idx===0) body.classList.remove("hidden");
+    });
+
+    document.getElementById("flightDialog").style.display = "flex";
+  }
+  window.openFlightDlg = openFlightDlg;
+  window.closeFlightDlg = ()=>{ document.getElementById("flightDialog").style.display="none"; };
+
+  /* ===== 候補データ ===== */
   const day2_3LunchCandidates = [
     { name: "元祖 博多めんたい重" },
     { name: "博多シーフード うお田" },
@@ -80,17 +239,26 @@
     { name: "うまや 福岡空港店" },
     { name: "B.B.Quisine（国内線3F）" },
   ];
+
+  /* ===== タイムライン ===== */
   const timeline = [
     {
       day: "Day 1 (9/19 金)",
       events: [
-        { time:"12:10", title:"🛫 名古屋発（飛行機）", detail:"12:10 → 13:35", hideMaps:true },
-        { time:"12:15", title:"🛫 東京発（飛行機）",   detail:"12:15 → 14:10", hideMaps:true },
+        { time:"12:10", title:"🛫 名古屋発（飛行機）", detail:"12:10 → 13:35", hideMaps:true,
+          flightKind:"outbound" },
+        { time:"12:15", title:"🛫 東京発（飛行機）",   detail:"12:15 → 14:10", hideMaps:true,
+          flightKind:"outbound" },
+
         { time:"15:00", title:"🍴 お昼", detail:"空港内の候補（10人以上OK）", candidates:airportLunchCandidates },
+
         { time:"16:00", title:"🏨 チェックイン", detail:"HOTEL 粋 - sui - HARUYOSHI（旧Grand Base Fukuoka）", mapsQ:"HOTEL 粋 - sui - HARUYOSHI" },
+
         { time:"16:30", title:"🚴 自転車観光", detail:"大濠公園 / 福岡城跡 / 博多ポートタワー / 櫛田神社 / 承天寺通り など",
           candidates:[{name:"大濠公園"},{name:"福岡城跡（舞鶴公園）"},{name:"博多ポートタワー"},{name:"櫛田神社"},{name:"承天寺通り"}] },
+
         { time:"20:30", title:"🍲 夜ご飯", detail:"元祖 もつ鍋 楽天地 天神本店（アクロス福岡 B2F）", mapsQ:"元祖 もつ鍋 楽天地 天神本店" },
+
         { time:"22:00", title:"🕒 自由時間", hideMaps:true },
       ]
     },
@@ -110,20 +278,28 @@
         { time:"12:00", title:"🍴 お昼（候補）", detail:"候補から選択", candidates:day2_3LunchCandidates },
         { time:"13:00", title:"🛍️ 空港ショッピング（お土産）",
           candidates:[{name:"ANA FESTA（国内線）"},{name:"博多銘品蔵"},{name:"そらもーる商店"},{name:"福太郎（明太子）"},{name:"東雲堂（にわかせんぺい）"}] },
-        { time:"14:15", title:"🛬 東京組 帰り（飛行機）", detail:"14:15 → 16:05", hideMaps:true },
-        { time:"14:50", title:"🛬 名古屋組 帰り（飛行機）", detail:"14:50 → 16:40", hideMaps:true },
+
+        { time:"14:15", title:"🛬 東京組 帰り（飛行機）", detail:"14:15 → 16:05", hideMaps:true,
+          flightKind:"inbound" },
+        { time:"14:50", title:"🛬 名古屋組 帰り（飛行機）", detail:"14:50 → 16:40", hideMaps:true,
+          flightKind:"inbound" },
       ]
     }
   ];
 
-  /* ---- UI ---- */
-  const Pill = ({children,onClick})=>(
-    <button onClick={onClick} className="inline-block px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm">
-      {children}
-    </button>
-  );
+  /* ===== UI ===== */
+  const Pill = ({children,onClick,kind="default"})=>{
+    const cls = kind==="primary"
+      ? "bg-gray-900 text-white hover:opacity-90"
+      : "bg-gray-100 text-gray-800 hover:bg-gray-200";
+    return (
+      <button onClick={onClick} className={`inline-block px-4 py-2 rounded-full text-sm ${cls}`}>
+        {children}
+      </button>
+    );
+  };
 
-  function EventRow({ time, title, detail, mapsQ, hideMaps, candidates }) {
+  function EventRow({ time, title, detail, mapsQ, hideMaps, candidates, flightKind }) {
     return (
       <div
         className="grid items-center mb-8"
@@ -132,7 +308,7 @@
         {/* 時間（等幅でズレ防止） */}
         <div className="text-right font-bold text-gray-800 tabular-nums">{time}</div>
 
-        {/* 丸（縦線は Day コンテナの1本を使用） */}
+        {/* 丸（レールは Day セクション側） */}
         <div className="relative flex items-center justify-center">
           <div className="w-[12px] h-[12px] bg-blue-600 rounded-full"></div>
         </div>
@@ -142,15 +318,26 @@
           <div className="font-semibold text-gray-900 text-lg">{title}</div>
           {detail && <div className="text-sm text-gray-600 mt-1">{detail}</div>}
 
-          {!hideMaps && mapsQ && (
-            <div className="mt-3"><Pill onClick={()=>openMapDialog(mapsQ)}>地図を開く</Pill></div>
+          {/* フライトのときは「フライト詳細」ボタン */}
+          {flightKind && (
+            <div className="mt-3">
+              <Pill kind="primary" onClick={()=>openFlightDlg(flightKind)}>フライト詳細</Pill>
+            </div>
           )}
 
+          {/* 固定スポット → 「地図を開く」（3択ダイアログ） */}
+          {!hideMaps && mapsQ && !flightKind && (
+            <div className="mt-3">
+              <Pill onClick={()=>openMapDlg(mapsQ)}>地図を開く</Pill>
+            </div>
+          )}
+
+          {/* 候補（タップで3択） */}
           {candidates && (
             <div className="mt-3">
               <div className="text-xs text-gray-500 mb-2">候補（タップでマップを選択）</div>
               <div className="flex flex-wrap gap-2">
-                {candidates.map((s,i)=>(<Pill key={i} onClick={()=>openMapDialog(s.name)}>{s.name}</Pill>))}
+                {candidates.map((s,i)=>(<Pill key={i} onClick={()=>openMapDlg(s.name)}>{s.name}</Pill>))}
               </div>
             </div>
           )}
@@ -164,20 +351,14 @@
       <div className="mb-12">
         <h2 className="text-xl font-semibold mb-6 border-b pb-2">{day}</h2>
 
-        {/* Day 全体のレール（上/下に少し余白 → 丸に当てない） */}
+        {/* Day 全体のレール（上/下に余白 → 丸に当てない） */}
         <div className="relative">
           <div
             className="absolute bg-gray-300"
-            style={{
-              left: `${RAIL_LEFT_PX}px`,
-              top: 10,               // ←上の余白（丸に当たらない）
-              bottom: 10,            // ←下の余白（丸に当たらない）
-              width: 2,
-              borderRadius: 9999
-            }}
+            style={{ left:`${RAIL_LEFT_PX}px`, top:10, bottom:10, width:2, borderRadius:9999 }}
           ></div>
 
-          {/* イベント本体 */}
+          {/* イベント */}
           <div>
             {events.map((ev,i)=>(<EventRow key={i} {...ev} />))}
           </div>
@@ -191,7 +372,7 @@
     return (
       <div
         className="p-6 md:p-8 w-full min-h-screen flex flex-col items-center"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}  // タイトルが被らないよう余白
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
       >
         <h1 className="text-3xl font-bold tracking-wide mt-2">福岡旅行</h1>
         <p className="text-sm text-gray-600 mb-6">期間：2025.09.19 - 2025.09.21</p>

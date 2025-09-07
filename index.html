@@ -30,7 +30,7 @@
     #mapDialog .apple{background:#111;color:#fff}
     #mapDialog .cancel{background:#e5e7eb;color:#111}
 
-    /* Flight シート（下から出るやつ） */
+    /* Flight シート（下から出る） */
     #flightSheet{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
     #flightSheet .sheet{width:100%;max-width:680px;background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -10px 25px rgba(0,0,0,.18);display:flex;flex-direction:column;max-height:85vh;
       will-change:transform;transition:transform .25s ease;}
@@ -56,7 +56,7 @@
     </div>
   </div>
 
-  <!-- Flight モーダル（行き／帰り） -->
+  <!-- Flight モーダル -->
   <div id="flightSheet" onclick="closeFlight()">
     <div id="flightPanel" class="sheet" onclick="event.stopPropagation()">
       <div class="bar"></div>
@@ -75,17 +75,18 @@
   const RAIL_OFFSET = -1;
   const RAIL_LEFT_PX = TIME_COL + GRID_GAP + (RAIL_COL / 2) + RAIL_OFFSET;
 
-  /* ===== Map リンク（今確実に開くこと最優先） ===== */
+  /* ===== Map リンク ===== */
   const openNew = url => window.open(url, "_blank", "noopener");
 
-  // Googleは「google.com/maps/search?api=1」を使う。座標があれば座標優先。
+  // Google: gUrlがあれば最優先でそのまま開く。無い場合だけ検索URL。
   const buildGoogleUrl = (place) => {
+    if (place?.gUrl) return place.gUrl;
     if (place?.lat != null && place?.lon != null) {
       return `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lon}`;
     }
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place?.name||"")}`;
   };
-  // Appleは座標があれば ll、なければ q
+  // Apple: 座標があれば ll、なければ q
   const buildAppleUrl = (place) => {
     if (place?.lat != null && place?.lon != null) {
       return `https://maps.apple.com/?ll=${place.lat},${place.lon}`;
@@ -105,9 +106,9 @@
     currentPlace = null;
   };
   window.goGoogle = () => { if (currentPlace) openNew(buildGoogleUrl(currentPlace)); closeDialog(); };
-  window.goApple  = () => { if (currentPlace) openNew(buildAppleUrl(currentPlace)); closeDialog(); };
+  window.goApple  = () => { if (currentPlace) openNew(buildAppleUrl(currentPlace));  closeDialog(); };
 
-  /* ===== Flight シート（スワイプで閉じる：上までスクロール → さらに120px引いたら閉じる） ===== */
+  /* ===== Flight シート（上までスクロール→さらに120px引いたら閉じる） ===== */
   const HND_MAP = "https://tokyo-haneda.com/floor/index.html";
   const NGO_MAP = "https://www.centrair.jp/map/index.html";
   const SFJ_CHECKIN = "https://www.starflyer.jp/checkin/boarding/vender.html";
@@ -117,7 +118,7 @@
   const DRAG_CLOSE_THRESHOLD = 120;
 
   const onDragStart = (y) => {
-    if (!topReached) return;      // 上端にいない時は閉じドラッグ開始しない
+    if (!topReached) return;      // 上端にいないときは閉じドラッグ開始しない
     dragging = true;
     startY = currentY = y;
     panelEl.classList.add('dragging');
@@ -133,22 +134,16 @@
     dragging = false;
     const delta = Math.max(0, currentY - startY);
     panelEl.classList.remove('dragging');
-    if (delta > DRAG_CLOSE_THRESHOLD) {
-      closeFlight();
-    } else {
-      panelEl.style.transform = 'translateY(0)';
-    }
+    if (delta > DRAG_CLOSE_THRESHOLD) closeFlight();
+    else panelEl.style.transform = 'translateY(0)';
   };
 
   const attachDragHandlers = () => {
-    // スクロール位置監視：一番上にいる時だけ「下スワイプで閉じる」を許可
     bodyEl.addEventListener('scroll', () => { topReached = bodyEl.scrollTop <= 0; }, {passive:true});
     topReached = bodyEl.scrollTop <= 0;
-
     panelEl.addEventListener('touchstart', (e)=> onDragStart(e.touches[0].clientY), {passive:true});
     panelEl.addEventListener('touchmove',  (e)=> onDragMove(e.touches[0].clientY), {passive:true});
     panelEl.addEventListener('touchend',   onDragEnd);
-
     panelEl.addEventListener('mousedown', (e)=> onDragStart(e.clientY));
     window.addEventListener('mousemove',  (e)=> onDragMove(e.clientY));
     window.addEventListener('mouseup',    onDragEnd);
@@ -173,13 +168,13 @@
     if (panelEl) panelEl.style.transform = 'translateY(0)';
   };
 
-  /* ===== スポット（ホテルは座標で“今確実に”開く） ===== */
+  /* ===== スポット（ホテルは指定URLを強制使用） ===== */
   const PLACES = {
     hotel: {
       name: "HOTEL 粋 - sui - HARUYOSHI",
-      // ▼あなたのスクショに合わせた座標（福岡・春吉）
-      lat: 33.5878056,
-      lon: 130.4056389,
+      // ★このURLを“そのまま”開く（ズレ防止）
+      gUrl: "https://maps.app.goo.gl/9hnLTTmkN7KGM31e8?g_st=ic",
+      // Appleは名前検索で表示（必要なら後で座標に変更）
     },
     exbar:  { name: "EXBAR TOKYO plus 博多" },
     maruya: { name: "海鮮居酒屋 まる家 西中洲" },
@@ -302,7 +297,6 @@
       if (action==="outbound") return openFlight(flightHtml("outbound"));
       if (action==="inbound")  return openFlight(flightHtml("inbound"));
     };
-
     return (
       <div className="grid items-center mb-8" style={{ gridTemplateColumns: `${TIME_COL}px ${RAIL_COL}px 1fr`, columnGap: `${GRID_GAP}px` }}>
         <div className="text-right font-bold text-gray-800 tabular-nums">{time}</div>
@@ -316,9 +310,7 @@
           {action && (<div className="mt-3"><Pill variant="ghost" onClick={openAction}>詳細を開く</Pill></div>)}
 
           {!action && place && (
-            <div className="mt-3">
-              <Pill onClick={()=>openMapDialog(place)}>地図を開く</Pill>
-            </div>
+            <div className="mt-3"><Pill onClick={()=>openMapDialog(place)}>地図を開く</Pill></div>
           )}
 
           {candidates && (
